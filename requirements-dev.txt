@@ -1,0 +1,5 @@
+# Outils de développement uniquement (notebooks, graphiques, audit de sécurité)
+-r requirements.txt
+jupyter
+matplotlib
+pip-audit

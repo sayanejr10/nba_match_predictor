@@ -1,5 +1,6 @@
 import os
 from datetime import date, timedelta
+from html import escape
 
 import joblib
 import pandas as pd
@@ -21,9 +22,8 @@ DEBUG = os.environ.get("COURTSIDE_DEBUG") == "1"
 NBA_LOGO = "https://cdn.nba.com/logos/leagues/logo-nba.svg"
 TEAM_LOGO = "https://cdn.nba.com/logos/nba/{team_id}/global/L/logo.svg"
 BASE_FEATURES = ["WIN_PCT_SEASON", "WIN_PCT_LAST10", "PM_LAST10", "REST_DAYS", "B2B"]
-WEEKDAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
-MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin",
-          "juil.", "août", "sept.", "oct.", "nov.", "déc."]
+WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 TEAM_COLORS = {
     "ATL": "#E03A3E", "BOS": "#007A33", "BKN": "#4B5563", "CHA": "#1D8CAB", "CHI": "#CE1141",
@@ -505,6 +505,10 @@ def load_season_games(season):
         timeout=60,
     ).get_data_frames()[0]
     df = df[df["WL"].notna()].copy()  # uniquement les matchs terminés
+    # Sécurité : on ne garde que des codes d'équipe au format attendu (2 à 4 majuscules),
+    # car ils sont ensuite insérés dans le HTML de la page
+    opp = df["MATCHUP"].astype(str).str.split().str[-1]
+    df = df[df["TEAM_ABBREVIATION"].astype(str).str.fullmatch(r"[A-Z]{2,4}") & opp.str.fullmatch(r"[A-Z]{2,4}")]
     df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"])
     df["WIN"] = (df["WL"] == "W").astype(int)
     return df.sort_values("GAME_DATE")
@@ -553,6 +557,8 @@ def standings(games, before):
             "TEAM": abbr, "GP": n, "W": w, "L": n - w, "PCT": w / n, "PM": t["PLUS_MINUS"].mean(),
             "L10": t["WIN"].tail(10).mean(), "LAST5": t["WL"].tail(5).tolist(),
         })
+    if not rows:  # jour d'ouverture : aucun match encore joué
+        return pd.DataFrame(columns=["TEAM", "GP", "W", "L", "PCT", "PM", "L10", "LAST5"])
     return pd.DataFrame(rows).sort_values(["PCT", "PM"], ascending=False).reset_index(drop=True)
 
 
@@ -566,20 +572,20 @@ def latest_scores(games, n=16):
 
 
 def fr_day(d):
-    """« dimanche 8 novembre »"""
-    full_months = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août",
-                   "septembre", "octobre", "novembre", "décembre"]
-    return f"{WEEKDAYS[d.weekday()]} {d.day} {full_months[d.month - 1]}"
+    """« Sunday, November 8 »"""
+    full_months = ["January", "February", "March", "April", "May", "June", "July", "August",
+                   "September", "October", "November", "December"]
+    return f"{WEEKDAYS[d.weekday()]}, {full_months[d.month - 1]} {d.day}"
 
 
 def fr_date(d, year=True):
-    return f"{d.day} {MONTHS[d.month - 1]}" + (f" {d.year}" if year else "")
+    return f"{MONTHS[d.month - 1]} {d.day}" + (f", {d.year}" if year else "")
 
 
 def form_bars(results):
-    label = ", ".join("victoire" if r == "W" else "défaite" for r in results)
+    label = ", ".join("win" if r == "W" else "loss" for r in results)
     bars = "".join(f'<i class="{r}" style="--i:{j}"></i>' for j, r in enumerate(results))
-    return f'<span class="form" role="img" aria-label="5 derniers matchs : {label}">{bars}</span>'
+    return f'<span class="form" role="img" aria-label="Last 5 games: {label}">{bars}</span>'
 
 
 # ----------------------------------------------------------------------------
@@ -618,8 +624,8 @@ def game_card(k, team, state):
         f'<span class="s" style="--cd:{.9 + k * .15:.2f}s">{count(pts)}</span></div>'
         for t, pts in lines
     )
-    result = "Victoire" if g["wl"] == "W" else "Défaite"
-    return (f'<div class="game cascade" style="--d0:.7s;--i:{k}"><div class="g-head"><span>Dernier match {team} · {result}</span>'
+    result = "Win" if g["wl"] == "W" else "Loss"
+    return (f'<div class="game cascade" style="--d0:.7s;--i:{k}"><div class="g-head"><span>{team} last game · {result}</span>'
             f'<span>{fr_date(g["date"], year=False)}</span></div>{body}</div>')
 
 
@@ -632,7 +638,10 @@ def load_schedule(season):
     df["gameId"] = df["gameId"].astype(str).str.zfill(10)
     # 002 = saison régulière, 004 = play-offs, 005 = play-in (on écarte la présaison et le All-Star Game)
     df = df[df["gameId"].str[:3].isin(["002", "004", "005"])].drop_duplicates("gameId").copy()
-    df = df[(df["homeTeam_teamTricode"].fillna("") != "") & (df["awayTeam_teamTricode"].fillna("") != "")]
+    # Sécurité : identifiants de match uniquement en chiffres, codes d'équipe au format attendu
+    df = df[df["gameId"].str.fullmatch(r"\d{10}")]
+    df = df[df["homeTeam_teamTricode"].astype(str).str.fullmatch(r"[A-Z]{2,4}")
+            & df["awayTeam_teamTricode"].astype(str).str.fullmatch(r"[A-Z]{2,4}")]
     df["US_DATE"] = pd.to_datetime(df["gameDateEst"].astype(str).str[:10], format="mixed", errors="coerce")
     df["START_UTC"] = pd.to_datetime(df["gameDateTimeUTC"], utc=True, errors="coerce")
     df["gameStatus"] = pd.to_numeric(df["gameStatus"], errors="coerce").fillna(1).astype(int)
@@ -646,8 +655,14 @@ def load_schedule(season):
 # ----------------------------------------------------------------------------
 bundle = load_model()
 model, features = bundle["model"], bundle["features"]
-games = load_season_games(CURRENT_SEASON)
-schedule = load_schedule(CURRENT_SEASON)
+try:
+    games = load_season_games(CURRENT_SEASON)
+    schedule = load_schedule(CURRENT_SEASON)
+except Exception:  # API lente, indisponible ou réponse inattendue
+    if DEBUG:
+        raise  # en mode développeur, on veut voir l'erreur complète
+    st.error("Live NBA data is temporarily unavailable. Please try again in a few minutes.")
+    st.stop()
 
 # Équipes : identifiant (pour les logos) et nom complet, tirés du calendrier
 teams_info = pd.concat([
@@ -655,7 +670,8 @@ teams_info = pd.concat([
     .set_axis(["TRI", "ID", "CITY", "NAME"], axis=1)
     for s in ("homeTeam", "awayTeam")
 ]).drop_duplicates("TRI").set_index("TRI")
-full_name = (teams_info["CITY"] + " " + teams_info["NAME"]).to_dict()
+# escape() neutralise les caractères spéciaux (<, >, ", &) : un texte de l'API ne peut pas devenir du code
+full_name = {t: escape(f"{c} {n}") for t, c, n in zip(teams_info.index, teams_info["CITY"], teams_info["NAME"])}
 
 # Dates de tous les matchs prévus de chaque équipe (pour calculer les jours de repos)
 team_dates = {
@@ -690,10 +706,10 @@ def predict(home_t, away_t, day):
 def local_time(g):
     """Heure de Cotonou. Si le match tombe le lendemain à Cotonou, on ajoute le jour (« lun. 02:30 »)."""
     if pd.isna(g.START_UTC):
-        return "Horaire à venir"
+        return "Time TBD"
     t = g.START_UTC.tz_convert(LOCAL_TZ)
     hhmm = t.strftime("%H:%M")
-    return hhmm if t.date() == g.US_DATE.date() else f"{WEEKDAYS[t.weekday()][:3]}. {hhmm}"
+    return hhmm if t.date() == g.US_DATE.date() else f"{WEEKDAYS[t.weekday()][:3]} {hhmm}"
 
 
 def pct(p):
@@ -753,8 +769,8 @@ if not st.session_state.get("intro_done") and qp.get("intro") != "0":
           {net_lines}<path d="M6 16 H66 M9 30 H63 M11 44 H61"/></svg></div>
       </div>
       <div class="intro-title">Court<span>Side</span></div>
-      <div class="intro-sub">Pronostics NBA</div>
-      <div class="intro-skip">Cliquer pour passer</div>
+      <div class="intro-sub">NBA Predictions</div>
+      <div class="intro-skip">Click to skip</div>
     </label>
     """)
 
@@ -766,15 +782,15 @@ html(f"""
 <nav class="nav">
   <div class="brand">
     <img src="{NBA_LOGO}" alt="NBA">
-    <div><div class="wm">Court<span>Side</span></div><div class="tl">Pronostics NBA par machine learning</div></div>
+    <div><div class="wm">Court<span>Side</span></div><div class="tl">NBA game predictions powered by machine learning</div></div>
   </div>
   <div class="nav-meta">
-    <span class="nav-pill">{icon("calendar", 14)} Saison <b>{CURRENT_SEASON}</b></span>
-    <span class="nav-pill">{icon("target", 14)} Précision <b>67 %</b></span>
+    <span class="nav-pill">{icon("calendar", 14)} Season <b>{CURRENT_SEASON}</b></span>
+    <span class="nav-pill">{icon("target", 14)} Accuracy <b>67%</b></span>
   </div>
 </nav>
 <div class="ticker" aria-hidden="true"><div class="ticker-track">
-  <span class="tag">Derniers scores</span>{scores}<span class="tag">Derniers scores</span>{scores}
+  <span class="tag">Latest scores</span>{scores}<span class="tag">Latest scores</span>{scores}
 </div></div>
 """)
 
@@ -783,11 +799,11 @@ html(f"""
 # ----------------------------------------------------------------------------
 with st.container(key="datebar"):
     c_prev, c_date, c_next, c_today = st.columns([1, 2.2, 1, 1], vertical_alignment="bottom")
-    c_prev.button("Veille", icon=":material/chevron_left:", on_click=_shift, args=(-1,), use_container_width=True)
-    c_date.date_input("Date des matchs (date américaine)", key="day", format="DD/MM/YYYY", on_change=_clear_match)
-    c_next.button("Lendemain", icon=":material/chevron_right:",
+    c_prev.button("Previous day", icon=":material/chevron_left:", on_click=_shift, args=(-1,), use_container_width=True)
+    c_date.date_input("Game date (US date)", key="day", format="MM/DD/YYYY", on_change=_clear_match)
+    c_next.button("Next day", icon=":material/chevron_right:",
                   on_click=_shift, args=(1,), use_container_width=True)
-    c_today.button("Aujourd'hui", on_click=lambda: (st.session_state.update(day=US_TODAY), _clear_match()),
+    c_today.button("Today", on_click=lambda: (st.session_state.update(day=US_TODAY), _clear_match()),
                    use_container_width=True)
 
 day = st.session_state["day"]
@@ -806,9 +822,9 @@ def game_tile(k, g):
     p, _, _ = predict(hm, aw, day_ts)
     status = g.gameStatus
     if status == 3:
-        top = '<span class="gfinal">Terminé</span>'
+        top = '<span class="gfinal">Final</span>'
     elif status == 2:
-        top = '<span class="glive">En cours</span>'
+        top = '<span class="glive">Live</span>'
     else:
         top = f'<span class="gtime">{local_time(g)}</span>'
 
@@ -828,19 +844,19 @@ def game_tile(k, g):
     body = line(aw, None if p is None else 1 - p, as_, away_lead) + line(hm, p, hs, home_lead)
 
     if p is None:
-        foot = '<span class="chip na">Pas encore assez de matchs</span>'
+        foot = '<span class="chip na">Not enough games yet</span>'
     elif status == 3:
         ok = (p >= .5) == (hs > as_)
-        foot = (f'<span class="chip ok">{icon("check", 12)} Pronostic juste</span>' if ok
-                else f'<span class="chip miss">{icon("x", 12)} Pronostic manqué</span>')
+        foot = (f'<span class="chip ok">{icon("check", 12)} Correct pick</span>' if ok
+                else f'<span class="chip miss">{icon("x", 12)} Missed pick</span>')
     else:
         fav_t, fav_p = (hm, p) if p >= .5 else (aw, 1 - p)
-        foot = f'<span class="chip fav">Favori : {fav_t} {pct(fav_p)} %</span>'
+        foot = f'<span class="chip fav">Favorite: {fav_t} {pct(fav_p)}%</span>'
     sel = "sel" if g.gameId == selected else ""
     return (f'<a class="gcard cascade {sel}" href="{link(day, g.gameId)}" target="_self" style="--d0:.15s;--i:{k}"'
-            f' aria-label="{full_name.get(aw, aw)} à {full_name.get(hm, hm)}, voir le pronostic">'
-            f'<div class="gtop">{top}<span>{g.arenaCity if isinstance(g.arenaCity, str) else ""}</span></div>'
-            f'{body}<div class="gfoot">{foot}<span class="see">Voir</span></div></a>')
+            f' aria-label="{full_name.get(aw, aw)} at {full_name.get(hm, hm)}, see the prediction">'
+            f'<div class="gtop">{top}<span>{escape(g.arenaCity) if isinstance(g.arenaCity, str) else ""}</span></div>'
+            f'{body}<div class="gfoot">{foot}<span class="see">View</span></div></a>')
 
 
 table = standings(games, day_ts)
@@ -858,22 +874,25 @@ hot_rows = "".join(
 )
 model_card = f"""
 <div class="card model" style="--d:.1s;margin-top:0">
-  <div class="eyebrow">Le modèle</div>
-  <div class="big num">{count(67)} %</div>
-  <div class="cap">de bonnes prédictions sur 2 418 matchs jamais vus</div>
+  <div class="eyebrow">The model</div>
+  <div class="big num">{count(67)}%</div>
+  <div class="cap">correct predictions on 2,418 unseen games</div>
   <div class="gauge"><div class="fill" style="width:67%"></div><div class="mark" style="left:55%"></div></div>
-  <div class="legend"><span>Baseline 55 %</span><span>Modèle 67 %</span></div>
+  <div class="legend"><span>Baseline 55%</span><span>Model 67%</span></div>
   <dl>
-    <dt>Algorithme</dt><dd>Régression logistique</dd>
-    <dt>Variables</dt><dd>10</dd>
-    <dt>Entraînement</dt><dd class="num">13 023 matchs</dd>
-    <dt>Saisons</dt><dd>2015 à 2026</dd>
+    <dt>Algorithm</dt><dd>Logistic regression</dd>
+    <dt>Features</dt><dd>10</dd>
+    <dt>Training set</dt><dd class="num">13,023 games</dd>
+    <dt>Seasons</dt><dd>2015 to 2026</dd>
   </dl>
 </div>
 """
 
 
 def standings_card(highlight=()):
+    if table.empty:
+        return ('<section class="card empty" style="--d:.4s"><b>Standings</b>'
+                'The standings will appear once the first games of the season have been played.</section>')
     shown = table[(table.index < 10) | table["TEAM"].isin(list(highlight))]
     rows, prev = [], -1
     for n_row, (i, r) in enumerate(shown.iterrows()):
@@ -892,10 +911,10 @@ def standings_card(highlight=()):
         """)
     return f"""
     <section class="card" style="--d:.4s">
-      <div class="card-head"><h3>Classement</h3><span>Saison {CURRENT_SEASON} · avant le {fr_date(day_ts, year=False)}</span></div>
+      <div class="card-head"><h3>Standings</h3><span>Season {CURRENT_SEASON} · before {fr_date(day_ts, year=False)}</span></div>
       <div class="tbl-wrap">
         <table class="std">
-          <tr><th>#</th><th>Équipe</th><th class="r">V-D</th><th class="r">%</th><th class="r">Écart</th><th>Forme</th></tr>
+          <tr><th>#</th><th>Team</th><th class="r">W-L</th><th class="r">Win %</th><th class="r">Diff</th><th>Form</th></tr>
           {"".join(rows)}
         </table>
       </div>
@@ -906,15 +925,15 @@ def standings_card(highlight=()):
 def render_grid(title=None):
     html(f"""
     <div class="day-head">
-      <h2>{title or 'Matchs du <span>' + fr_day(day) + '</span>'}</h2>
-      <span class="sub">{icon("clock", 13)} {n} match{"s" if n > 1 else ""} · heures affichées en heure de Cotonou</span>
+      <h2>{title or 'Games on <span>' + fr_day(day) + '</span>'}</h2>
+      <span class="sub">{icon("clock", 13)} {n} game{"s" if n != 1 else ""} · times shown in Cotonou time</span>
     </div>
     """)
     if n == 0:
         html(f"""
         <div class="card empty">
-          <b>Aucun match ce jour-là</b>
-          Utilise les flèches pour passer à la veille ou au lendemain.
+          <b>No games on this day</b>
+          Use the buttons to go to the previous or next day.
         </div>
         """)
     else:
@@ -933,7 +952,7 @@ if match.empty:
         html(f"""
         <div class="card hint" style="--d:.3s">
           <span class="dot">{BALL_SVG}</span>
-          Clique sur un match pour voir le pronostic détaillé : probabilités, comparaison des deux équipes et derniers résultats.
+          Click a game to see the full prediction: win probabilities, head-to-head comparison and recent results.
         </div>
         """)
     html(f"""
@@ -941,8 +960,8 @@ if match.empty:
       {standings_card()}
       <div class="stack">
         <section class="card" style="--d:.5s">
-          <div class="card-head"><h3>En forme</h3><span>10 derniers matchs</span></div>
-          <div class="hot">{hot_rows}</div>
+          <div class="card-head"><h3>Hot teams</h3><span>Last 10 games</span></div>
+          <div class="hot">{hot_rows or '<div class="empty">No games played yet.</div>'}</div>
         </section>
         {model_card}
       </div>
@@ -959,16 +978,16 @@ else:
 
     html(f"""
     <div class="detail-head" style="margin-top:22px">
-      <h2>Pronostic · <span style="color:var(--primary)">{full_name[away]} à {full_name[home]}</span></h2>
-      <a class="back" href="{link(day)}" target="_self">Fermer le pronostic</a>
+      <h2>Prediction · <span style="color:var(--primary)">{full_name[away]} at {full_name[home]}</span></h2>
+      <a class="back" href="{link(day)}" target="_self">Close prediction</a>
     </div>
     """)
 
     if p_home is None:
         html("""
         <div class="card empty">
-          <b>Pas encore de pronostic pour ce match</b>
-          Une des deux équipes n'a joué aucun match avant cette date : le modèle n'a pas de forme à analyser.
+          <b>No prediction for this game yet</b>
+          One of the two teams hasn't played a game before this date, so the model has no form to analyze.
         </div>
         """)
         st.stop()
@@ -976,48 +995,48 @@ else:
     p_away = 1 - p_home
     fav, p_fav = (home, p_home) if p_home >= 0.5 else (away, p_away)
     if p_fav < 0.55:
-        verdict = f'<span class="verdict even">{icon("scale")} Match très serré, pas de vrai favori</span>'
+        verdict = f'<span class="verdict even">{icon("scale")} Toss-up, no clear favorite</span>'
     elif p_fav < 0.65:
-        verdict = f'<span class="verdict lean">{icon("trend")} Léger avantage {full_name[fav]}</span>'
+        verdict = f'<span class="verdict lean">{icon("trend")} Slight edge: {full_name[fav]}</span>'
     else:
-        verdict = f'<span class="verdict strong">{icon("trend")} {full_name[fav]} nettement favori</span>'
+        verdict = f'<span class="verdict strong">{icon("trend")} {full_name[fav]} strong favorite</span>'
 
     # Match terminé : on montre le score final et si le modèle avait raison
     if g.gameStatus == 3:
         ok = (p_home >= .5) == (g.homeTeam_score > g.awayTeam_score)
-        chip = (f'<span class="chip ok">{icon("check", 12)} Le modèle avait vu juste</span>' if ok
-                else f'<span class="chip miss">{icon("x", 12)} Le modèle s\'est trompé</span>')
-        verdict += (f'<span class="result">Score final <b>{away} {g.awayTeam_score} – {g.homeTeam_score} {home}</b>'
+        chip = (f'<span class="chip ok">{icon("check", 12)} The model got it right</span>' if ok
+                else f'<span class="chip miss">{icon("x", 12)} The model got it wrong</span>')
+        verdict += (f'<span class="result">Final score <b>{away} {g.awayTeam_score} – {g.homeTeam_score} {home}</b>'
                     f'{chip}</span>')
 
     note = ""
     if min(h["GAMES"], a["GAMES"]) < 10:
-        note = (f'<span class="note">{icon("alert", 14)} Début de saison : {h["GAMES"]} et {a["GAMES"]} '
-                f'matchs joués, prédiction moins fiable</span>')
+        note = (f'<span class="note">{icon("alert", 14)} Early season: {h["GAMES"]} and {a["GAMES"]} '
+                f'games played, less reliable prediction</span>')
 
     home_cls, away_cls = ("", "dog") if p_home >= 0.5 else ("dog", "")
     home_fav, away_fav = ("fav", "") if p_home >= 0.5 else ("", "fav")
-    arena = g.arenaName if isinstance(g.arenaName, str) and g.arenaName else full_name[home]
+    arena = escape(g.arenaName) if isinstance(g.arenaName, str) and g.arenaName else full_name[home]
 
     hero = f"""
     <section class="card hero" style="--home:{color(home)};--away:{color(away)}">
       <div class="hero-top">
-        <span class="eyebrow">Probabilité de victoire</span>
+        <span class="eyebrow">Win probability</span>
         <div class="hero-meta">
-          <span>{icon("calendar")} {fr_date(day_ts)} · {local_time(g)} à Cotonou</span>
+          <span>{icon("calendar")} {fr_date(day_ts)} · {local_time(g)} Cotonou time</span>
           <span>{icon("pin")} {arena}</span>
         </div>
       </div>
       <div class="duel" role="img" aria-label="{full_name[home]} {p_home:.0%}, {full_name[away]} {p_away:.0%}">
         <div class="side home {home_fav}">
           <div class="logo-wrap" style="--c:{color(home)}"><span class="halo"></span><img src="{logo(home)}" alt="{full_name[home]}"></div>
-          <div><div class="tname">{full_name[home]}</div><div class="trec num">{h['RECORD']} · Domicile</div>
+          <div><div class="tname">{full_name[home]}</div><div class="trec num">{h['RECORD']} · Home</div>
                <div class="prob {home_cls}">{flaps(pct(p_home), .55)}<small>%</small></div></div>
         </div>
         <div class="vs"><div class="v">VS</div><div class="l">{fr_date(day_ts, year=False)}</div></div>
         <div class="side away {away_fav}">
           <div class="logo-wrap" style="--c:{color(away)}"><span class="halo"></span><img src="{logo(away)}" alt="{full_name[away]}"></div>
-          <div><div class="tname">{full_name[away]}</div><div class="trec num">{a['RECORD']} · Extérieur</div>
+          <div><div class="tname">{full_name[away]}</div><div class="trec num">{a['RECORD']} · Away</div>
                <div class="prob {away_cls}">{flaps(100 - pct(p_home), .7)}<small>%</small></div></div>
         </div>
       </div>
@@ -1032,12 +1051,12 @@ else:
     b2b_h = '<span class="tag-b2b">B2B</span>' if h["B2B"] else ""
     b2b_a = '<span class="tag-b2b">B2B</span>' if a["B2B"] else ""
     kpis = (
-        kpi(0, "Bilan saison", h["WIN_PCT_SEASON"], a["WIN_PCT_SEASON"], h["RECORD"], a["RECORD"], lambda v: v)
-        + kpi(1, "10 derniers matchs", h["WIN_PCT_LAST10"], a["WIN_PCT_LAST10"], h["L10"], a["L10"], lambda v: v)
-        + kpi(2, "Écart moyen · 10 derniers", h["PM_LAST10"], a["PM_LAST10"],
+        kpi(0, "Season record", h["WIN_PCT_SEASON"], a["WIN_PCT_SEASON"], h["RECORD"], a["RECORD"], lambda v: v)
+        + kpi(1, "Last 10 games", h["WIN_PCT_LAST10"], a["WIN_PCT_LAST10"], h["L10"], a["L10"], lambda v: v)
+        + kpi(2, "Avg point diff · last 10", h["PM_LAST10"], a["PM_LAST10"],
               f"{h['PM_LAST10']:+.1f}", f"{a['PM_LAST10']:+.1f}", lambda v: (v + 15) / 30)
-        + kpi(3, "Jours de repos", h["REST_DAYS"], a["REST_DAYS"],
-              f"{b2b_h}{h['REST_DAYS']} j", f"{b2b_a}{a['REST_DAYS']} j", lambda v: v / 4)
+        + kpi(3, "Days of rest", h["REST_DAYS"], a["REST_DAYS"],
+              f"{b2b_h}{h['REST_DAYS']}d", f"{b2b_a}{a['REST_DAYS']}d", lambda v: v / 4)
     )
 
     html(f"""
@@ -1048,28 +1067,28 @@ else:
         {standings_card((home, away))}
         <div class="stack">
           <section class="card" style="--d:.5s">
-            <div class="card-head"><h3>Derniers matchs</h3><span>{icon("clock", 13)} avant ce match</span></div>
+            <div class="card-head"><h3>Last games</h3><span>{icon("clock", 13)} before this game</span></div>
             <div class="games">{game_card(0, home, h)}{game_card(1, away, a)}</div>
           </section>
           <section class="card" style="--d:.6s">
-            <div class="card-head"><h3>En forme</h3><span>10 derniers matchs</span></div>
-            <div class="hot">{hot_rows}</div>
+            <div class="card-head"><h3>Hot teams</h3><span>Last 10 games</span></div>
+            <div class="hot">{hot_rows or '<div class="empty">No games played yet.</div>'}</div>
           </section>
         </div>
       </div>
     </div>
     """)
 
-    render_grid(f"Autres matchs du <span>{fr_day(day)}</span>")
+    render_grid(f"Other games on <span>{fr_day(day)}</span>")
 
     if DEBUG:
         row = {f"{k}_HOME": h[k] for k in BASE_FEATURES} | {f"{k}_AWAY": a[k] for k in BASE_FEATURES}
         X = pd.DataFrame([row])[features]
-        with st.expander("Détail : les 10 valeurs envoyées au modèle"):
-            st.dataframe(X.T.rename(columns={0: "valeur"}).round(3), use_container_width=True)
+        with st.expander("Debug: the 10 values sent to the model"):
+            st.dataframe(X.T.rename(columns={0: "value"}).round(3), use_container_width=True)
 
 html("""
 <div class="footer">
-  CourtSide · projet personnel à but pédagogique, non affilié à la NBA. Logos © NBA et ses équipes.
+  CourtSide · personal learning project, not affiliated with the NBA. Logos © NBA and its teams.
 </div>
 """)
