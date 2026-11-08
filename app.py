@@ -118,7 +118,8 @@ html("""
   --t-fill: 1.4s;
 }
 
-html, body, .stApp, [class*="css"], button, input, label, p { font-family: var(--body) !important; }
+html, body, .stApp, [class*="css"], button, input, label, p,
+[data-testid="stMarkdownContainer"], .stMarkdown, [data-testid="stText"] { font-family: var(--body) !important; }
 .wm, .panel-title, .card-head h3, .model .big, .tname, .prob, .vs .v, .cmp .val, .g-line .s, .ticker-track .tag,
 .day-head h2, .detail-head h2, .gtime, .gline .v, .result b, .empty b, .flaps, .intro-title {
   font-weight: 400 !important; font-synthesis: none; }
@@ -177,7 +178,10 @@ header[data-testid="stHeader"] { display: none; }
 .card-head { display: flex; justify-content: space-between; align-items: baseline; padding: 16px 20px 10px; }
 .card-head h3 { font-family: var(--display); font-size: 22px; font-weight: 700; text-transform: uppercase;
                 letter-spacing: .6px; color: var(--fg); margin: 0; padding: 0; }
-.card-head span { font-size: 13px; color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+.card-head > span { font-size: 13px; color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+/* Streamlit place le texte des titres dans un <span> : il garde la taille et la couleur du titre */
+h1 [data-heading-text], h2 [data-heading-text], h3 [data-heading-text] { font-size: inherit; color: inherit; }
+[data-testid="stHeaderActionElements"] { display: none !important; }
 .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 1.4px; text-transform: uppercase; color: var(--subtle); }
 
 /* Modèle (colonne de gauche) */
@@ -399,8 +403,8 @@ table.std tr:hover .club img { transform: scale(1.15); }
 .day-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 22px 0 12px; }
 .day-head h2 { font-family: var(--display); font-weight: 400 !important; font-size: 32px; text-transform: uppercase;
                letter-spacing: .5px; color: var(--fg); margin: 0; padding: 0; }
-.day-head h2 span { color: var(--primary); }
-.day-head .sub { font-size: 13px; color: var(--subtle); display: inline-flex; align-items: center; gap: 6px; }
+.day-head h2 [data-heading-text] > span { color: var(--primary); }
+.day-head > .sub { font-size: 13px; color: var(--subtle); display: inline-flex; align-items: center; gap: 6px; }
 
 .ggrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(255px, 100%), 1fr)); gap: 14px; }
 a.gcard, a.gcard:hover, a.gcard:visited { text-decoration: none !important; color: inherit !important; }
@@ -461,6 +465,66 @@ a.back:hover { text-decoration: underline !important; }
   .nav-meta { display: none; }
 }
 
+
+/* ===================== STREETBALL : STYLE AUTOCOLLANT POUR TOUTE L'APP ===================== */
+:root { --ink: #0B1220; --sticker: 4px 4px 0 var(--ink); --sticker-hover: 6px 6px 0 var(--ink); }
+.card, .st-key-datebar { border: 2.5px solid var(--ink) !important; border-radius: 14px !important; box-shadow: var(--sticker) !important; }
+.card:hover { transform: translate(-2px, -2px); box-shadow: var(--sticker-hover) !important; }
+.hero:hover { transform: none; box-shadow: var(--sticker) !important; }
+.eyebrow { font-family: var(--num) !important; font-weight: 400 !important; font-size: 11px; letter-spacing: 1.2px; color: var(--ink); }
+
+/* Cartes de matchs */
+.gcard { border: 2.5px solid var(--ink) !important; border-radius: 14px !important; box-shadow: var(--sticker) !important; }
+.gcard:hover { transform: translate(-2px, -2px); box-shadow: var(--sticker-hover) !important; border-color: var(--ink) !important; }
+.gcard:active { transform: translate(4px, 4px); box-shadow: 0 0 0 var(--ink) !important; transition-duration: .08s; }
+.gcard.sel { background: #FFF7ED; box-shadow: 5px 5px 0 #C2410C !important; }
+.gfoot { border-top: 2px dashed #CBD5E1; }
+.gfoot .see { font-family: var(--num); font-size: 11px; letter-spacing: 1px; color: #C2410C; }
+.chip { border: 1.5px solid currentColor; }
+
+/* Badges de rang (classement et équipes en forme) */
+.seed { display: inline-grid; place-items: center; width: 28px; height: 28px; border: 2px solid var(--ink); border-radius: 8px;
+        font-family: var(--num); font-size: 13px; color: var(--ink); background: #fff; box-shadow: 2px 2px 0 var(--ink); }
+.seed.s1 { background: #FACC15; } .seed.s2 { background: #E2E8F0; } .seed.s3 { background: #FDBA74; }
+
+/* Classement */
+table.std th { font-family: var(--num) !important; font-weight: 400 !important; font-size: 11px !important; letter-spacing: 1px;
+               color: var(--ink) !important; border-bottom: 2.5px solid var(--ink) !important; }
+table.std td { border-bottom: 1.5px dashed #E2E8F0 !important; }
+table.std td.r { font-family: var(--num); font-size: 14px; white-space: nowrap; }
+table.std .club { font-weight: 700; font-size: 15px; }
+table.std tr:hover td { background: #F8FAFC; }
+table.std tr.sel td { background: #FFF7ED; }
+table.std tr.sel td:first-child { box-shadow: inset 5px 0 0 #C2410C; }
+.form i { width: 9px; border: 1.5px solid var(--ink); border-radius: 3px; }
+.form i.W { background: #22C55E; } .form i.L { background: #FCA5A5; }
+
+/* Équipes en forme */
+.hot-row { grid-template-columns: 30px 28px 1fr 84px 50px; }
+.hot-row .n { font-weight: 700; font-size: 15px; }
+.hot-row .track { height: 12px; border: 2px solid var(--ink); background: #fff; }
+.hot-row .p { font-family: var(--num); font-weight: 400; font-size: 15px; }
+
+/* Barres de comparaison et derniers matchs */
+.track { border: 1.5px solid var(--ink); height: 8px; background: #fff; }
+.game { border: 2px solid var(--ink); border-radius: 12px; }
+.g-head { font-weight: 600; }
+
+/* Carte d'invitation : un ballon qui rebondit */
+.hint { padding: 18px 22px; }
+.hint b { display: block; font-family: var(--display); font-weight: 400; font-size: 24px; color: var(--ink); letter-spacing: .5px; line-height: 1.1; }
+.hint .dot { width: 46px; height: 46px; }
+.bouncing { animation: ball-bounce 1.1s cubic-bezier(.5, 0, .5, 1) calc(var(--o, 0s) + 1s) infinite; transform-origin: 50% 100%; }
+@keyframes ball-bounce {
+  0%, 100% { transform: translateY(0) scale(1.08, .9); }
+  15%      { transform: translateY(-4px) scale(.96, 1.05); }
+  50%      { transform: translateY(-16px) scale(1, 1); }
+  85%      { transform: translateY(-4px) scale(.96, 1.05); } }
+
+/* Titres de section un peu plus présents */
+.card-head h3 { color: var(--ink); font-size: 24px !important; }
+.card-head { border-bottom: 2.5px solid var(--ink); margin-bottom: 8px; padding-bottom: 10px; }
+
 /* ===================== TÉLÉPHONE ET PETITES TABLETTES ===================== */
 @media (max-width: 1150px) {
   .split { grid-template-columns: minmax(0, 1fr); }
@@ -495,7 +559,11 @@ a.back:hover { text-decoration: underline !important; }
   table.std .club { gap: 8px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
   .card-head { flex-wrap: wrap; gap: 4px 12px; padding: 14px 14px 8px; }
   .games, .hot { padding-left: 14px; padding-right: 14px; }
-  .hot-row { grid-template-columns: 16px 26px 1fr 48px 38px; gap: 8px; }
+  .hot-row { grid-template-columns: 26px 26px 1fr 52px 42px; gap: 8px; }
+  .seed { width: 24px; height: 24px; font-size: 11px; }
+  table.std td.r { font-size: 12px; }
+  table.std .club { font-size: 13px; }
+  .card-head h3 { font-size: 20px !important; }
   /* Intro */
   .intro-title { font-size: 34px; }
   .board { transform: scale(.8); transform-origin: bottom center; }
@@ -874,7 +942,7 @@ hot = table.sort_values(["L10", "PM"], ascending=False).head(5).reset_index(drop
 hot_rows = "".join(
     f"""
     <div class="hot-row cascade" style="--d0:.9s;--i:{k}">
-      <span class="rk">{k + 1}</span><img src="{logo(r.TEAM)}" alt="">
+      <span class="seed s{min(k + 1, 4)}">{k + 1}</span><img src="{logo(r.TEAM)}" alt="">
       <span class="n">{full_name.get(r.TEAM, r.TEAM)}</span>
       <div class="track"><div style="width:{r.L10:.0%};background:{color(r.TEAM)};--i:{k + 3}"></div></div>
       <span class="p">{r.L10:.0%}</span>
@@ -911,7 +979,7 @@ def standings_card(highlight=()):
         prev = i
         rows.append(f"""
         <tr class="{'sel' if r.TEAM in highlight else ''} cascade" style="--d0:.6s;--i:{n_row}">
-          <td class="rk">{i + 1}</td>
+          <td class="rk"><span class="seed s{min(i + 1, 4)}">{i + 1}</span></td>
           <td><div class="club"><img src="{logo(r.TEAM)}" alt="">{full_name.get(r.TEAM, r.TEAM)}</div></td>
           <td class="r">{r.W}-{r.L}</td>
           <td class="r">{r.PCT:.0%}</td>
@@ -961,8 +1029,9 @@ if match.empty:
     if n:
         html(f"""
         <div class="card hint" style="--d:.3s">
-          <span class="dot">{BALL_SVG}</span>
-          Click a game to see the full prediction: win probabilities, head-to-head comparison and recent results.
+          <span class="dot bouncing">{BALL_SVG}</span>
+          <div><b>Pick a game</b>
+          Tap any game above to see the full prediction: win probabilities, head-to-head and recent results.</div>
         </div>
         """)
     html(f"""
@@ -1099,6 +1168,6 @@ else:
 
 html("""
 <div class="footer">
-  CourtSide · personal learning project, not affiliated with the NBA. Logos © NBA and its teams.
+  © 2026 CourtSide · Predictions for entertainment only
 </div>
 """)
