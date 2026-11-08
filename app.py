@@ -827,8 +827,7 @@ html(f"""
 <nav class="nav">
   <div class="brand">
     <img src="{NBA_LOGO}" alt="NBA">
-    <div><div class="wm">Court<span>Side</span></div><div class="tl">NBA game predictions powered by machine learning</div></div>
-  </div>
+    <div class="wm">Court<span>Side</span></div>  </div>
   <div class="nav-meta">
     <span class="nav-pill">{icon("calendar", 14)} Season <b>{CURRENT_SEASON}</b></span>
     <span class="nav-pill">{icon("target", 14)} Accuracy <b>67%</b></span>
@@ -845,7 +844,7 @@ html(f"""
 with st.container(key="datebar"):
     c_prev, c_date, c_next, c_today = st.columns([1, 2.2, 1, 1], vertical_alignment="bottom")
     c_prev.button("Prev", icon=":material/chevron_left:", on_click=_shift, args=(-1,), use_container_width=True)
-    c_date.date_input("Game date (US date)", key="day", format="MM/DD/YYYY", on_change=_clear_match)
+    c_date.date_input("Game date", key="day", format="MM/DD/YYYY", on_change=_clear_match)
     c_next.button("Next", icon=":material/chevron_right:",
                   on_click=_shift, args=(1,), use_container_width=True)
     c_today.button("Today", on_click=lambda: (st.session_state.update(day=US_TODAY), _clear_match()),
@@ -1008,8 +1007,7 @@ if match.empty:
           <div class="card-head"><h3>Hot teams</h3><span>Last 10 games</span></div>
           <div class="hot">{hot_rows or '<div class="empty">No games played yet.</div>'}</div>
         </section>
-        {model_card}
-      </div>
+        {model_card if DEBUG else ""}      </div>
     </div>
     """)
 
