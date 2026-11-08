@@ -7,6 +7,8 @@ import pandas as pd
 import streamlit as st
 from nba_api.stats.endpoints import leaguegamefinder, scheduleleaguev2
 
+from intro import intro_html
+
 # ----------------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------------
@@ -87,7 +89,7 @@ def count(value: int) -> str:
 # ----------------------------------------------------------------------------
 html("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Russo+One&family=Chakra+Petch:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sedgwick+Ave+Display&family=Bungee&family=Bricolage+Grotesque:opsz,wght@12..96,400..700&display=swap');
 
 :root {
   --bg: #F8FAFC;
@@ -104,8 +106,10 @@ html("""
   --radius: 12px;
   --shadow: 0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.06);
   --shadow-hover: 0 10px 24px -8px rgba(15,23,42,.18);
-  --display: 'Russo One', 'Arial Black', sans-serif;
-  --body: 'Chakra Petch', -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Style « Streetball » : graffiti pour les titres, Bungee pour les chiffres, Bricolage Grotesque pour le texte */
+  --display: 'Sedgwick Ave Display', 'Marker Felt', 'Comic Sans MS', cursive;
+  --num: 'Bungee', 'Arial Black', sans-serif;
+  --body: 'Bricolage Grotesque', -apple-system, 'Segoe UI', Roboto, sans-serif;
   /* Jetons de mouvement : une seule courbe et trois durées pour toute l'app */
   --ease: cubic-bezier(.16, 1, .3, 1);
   --spring: cubic-bezier(.34, 1.56, .64, 1);
@@ -115,8 +119,12 @@ html("""
 }
 
 html, body, .stApp, [class*="css"], button, input, label, p { font-family: var(--body) !important; }
-.wm, .panel-title, .card-head h3, .model .big, .tname, .prob, .vs .v, .cmp .val, .g-line .s, .ticker-track .tag {
+.wm, .panel-title, .card-head h3, .model .big, .tname, .prob, .vs .v, .cmp .val, .g-line .s, .ticker-track .tag,
+.day-head h2, .detail-head h2, .gtime, .gline .v, .result b, .empty b, .flaps, .intro-title {
   font-weight: 400 !important; font-synthesis: none; }
+/* Le graffiti respire un peu plus et penche légèrement, comme une signature */
+.wm, .tname, .day-head h2, .detail-head h2, .card-head h3, .panel-title { letter-spacing: .5px !important; }
+.wm { transform: rotate(-2deg); display: inline-block; }
 .stApp { background: var(--bg); color: var(--fg); overflow-x: hidden; }
 header[data-testid="stHeader"] { display: none; }
 #MainMenu, footer { visibility: hidden; }
@@ -129,7 +137,7 @@ header[data-testid="stHeader"] { display: none; }
        align-items: center; justify-content: space-between; }
 .brand { display: flex; align-items: center; gap: 14px; }
 .brand img { height: 40px; }
-.brand .wm { font-family: var(--display); font-weight: 700; font-size: 24px; letter-spacing: 1px;
+.brand .wm { font-family: var(--display); font-weight: 700; font-size: 32px; letter-spacing: 1px;
              color: #fff; text-transform: uppercase; line-height: 1; }
 .brand .wm span { color: #60A5FA; }
 .brand .tl { font-size: 12px; color: #94A3B8; margin-top: 3px; }
@@ -145,7 +153,7 @@ header[data-testid="stHeader"] { display: none; }
 .ticker:hover .ticker-track { animation-play-state: paused; }
 .ticker-track span { font-size: 13px; color: var(--muted); margin: 0 22px; }
 .ticker-track b { color: var(--fg); font-weight: 700; font-variant-numeric: tabular-nums; }
-.ticker-track .tag { font-family: var(--display); font-weight: 700; font-size: 12px; letter-spacing: 1px;
+.ticker-track .tag { font-family: var(--num); font-weight: 700; font-size: 12px; letter-spacing: 1px;
                      text-transform: uppercase; color: var(--primary); margin: 0 22px 0 28px; }
 @keyframes scroll { to { transform: translateX(-50%); } }
 
@@ -158,7 +166,7 @@ header[data-testid="stHeader"] { display: none; }
   transition: border-color var(--t-fast) ease, box-shadow var(--t-fast) ease; cursor: pointer; }
 .st-key-pick [data-baseweb="select"] > div:hover, .st-key-pick [data-baseweb="input"]:hover {
   border-color: #94A3B8 !important; box-shadow: 0 0 0 3px rgba(30,64,175,.06); }
-.panel-title { font-family: var(--display); font-size: 16px; font-weight: 700; text-transform: uppercase;
+.panel-title { font-family: var(--display); font-size: 20px; font-weight: 700; text-transform: uppercase;
                letter-spacing: .6px; color: var(--fg); margin: 2px 0 2px; }
 .panel-sub { font-size: 13px; color: var(--subtle); margin-bottom: 4px; }
 
@@ -167,14 +175,14 @@ header[data-testid="stHeader"] { display: none; }
         transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) ease; }
 .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
 .card-head { display: flex; justify-content: space-between; align-items: baseline; padding: 16px 20px 10px; }
-.card-head h3 { font-family: var(--display); font-size: 16px; font-weight: 700; text-transform: uppercase;
+.card-head h3 { font-family: var(--display); font-size: 22px; font-weight: 700; text-transform: uppercase;
                 letter-spacing: .6px; color: var(--fg); margin: 0; padding: 0; }
 .card-head span { font-size: 13px; color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
 .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 1.4px; text-transform: uppercase; color: var(--subtle); }
 
 /* Modèle (colonne de gauche) */
 .model { padding: 18px 20px; margin-top: 16px; }
-.model .big { font-family: var(--display); font-size: 40px; font-weight: 700; color: var(--fg); line-height: 1; margin-top: 6px; }
+.model .big { font-family: var(--num); font-size: 40px; font-weight: 700; color: var(--fg); line-height: 1; margin-top: 6px; }
 .model .cap { font-size: 13px; color: var(--muted); margin-top: 4px; }
 .model .gauge { position: relative; height: 8px; border-radius: 999px; background: var(--soft); margin: 14px 0 8px; }
 .model .gauge .fill { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--primary); }
@@ -201,15 +209,15 @@ header[data-testid="stHeader"] { display: none; }
 .logo-wrap { position: relative; flex-shrink: 0; width: 104px; height: 104px; display: grid; place-items: center; }
 .logo-wrap img { height: 104px; width: 104px; object-fit: contain; filter: drop-shadow(0 6px 14px rgba(15,23,42,.14)); }
 .halo { position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--c); opacity: 0; }
-.tname { font-family: var(--display); font-size: 24px; font-weight: 700; text-transform: uppercase;
+.tname { font-family: var(--display); font-size: 30px; font-weight: 700; text-transform: uppercase;
          color: var(--fg); line-height: 1; letter-spacing: .3px; }
 .trec { font-size: 14px; color: var(--muted); margin-top: 6px; }
-.prob { font-family: var(--display); font-size: 64px; font-weight: 700; line-height: .95; margin-top: 8px;
+.prob { font-family: var(--num); font-size: 58px; font-weight: 700; line-height: .95; margin-top: 8px;
         font-variant-numeric: tabular-nums; color: var(--fg); }
 .prob small { font-size: 28px; margin-left: 2px; }
 .prob.dog { color: var(--subtle); }
 .vs { text-align: center; }
-.vs .v { font-family: var(--display); font-size: 22px; font-weight: 700; color: var(--subtle); letter-spacing: 2px; }
+.vs .v { font-family: var(--num); font-size: 22px; font-weight: 700; color: var(--subtle); letter-spacing: 2px; }
 .vs .l { font-size: 11px; color: var(--subtle); text-transform: uppercase; letter-spacing: 1.2px; margin-top: 4px; }
 /* Rail de probabilité + ballon */
 .roll { position: relative; height: 32px; margin-top: 20px; --t-roll: 1.6s; }
@@ -252,7 +260,7 @@ header[data-testid="stHeader"] { display: none; }
 .cmp .ab { font-size: 13px; font-weight: 700; color: var(--muted); }
 .track { height: 6px; border-radius: 999px; background: var(--soft); overflow: hidden; }
 .track div { height: 100%; border-radius: 999px; }
-.cmp .val { font-family: var(--display); font-size: 19px; font-weight: 600; color: var(--muted);
+.cmp .val { font-family: var(--num); font-size: 17px; font-weight: 600; color: var(--muted);
             font-variant-numeric: tabular-nums; min-width: 48px; text-align: right; }
 .cmp .val.best { color: var(--fg); font-weight: 700; }
 .tag-b2b { display: inline-block; font-family: var(--body); font-size: 11px; font-weight: 700; color: #92400E;
@@ -292,7 +300,7 @@ table.std tr:hover .club img { transform: scale(1.15); }
 .g-line { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 10px; padding: 3px 0; color: var(--subtle); }
 .g-line img { height: 26px; width: 26px; object-fit: contain; }
 .g-line .n { font-weight: 600; }
-.g-line .s { font-family: var(--display); font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.g-line .s { font-family: var(--num); font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .g-line.win { color: var(--fg); }
 .g-line.win .s { font-weight: 700; }
 
@@ -358,57 +366,6 @@ table.std tr:hover .club img { transform: scale(1.15); }
 .model .gauge .fill { transform-origin: left; animation: grow var(--t-fill) var(--ease) calc(var(--o, 0s) + .3s) both; }
 .model .gauge .mark { animation: fade .4s ease calc(var(--o, 0s) + 1.2s) both; }
 
-/* 1. Intro « swish » : un tir, le filet, puis le tableau de bord */
-.skip-cb { position: fixed; opacity: 0; pointer-events: none; }
-.intro { position: fixed; inset: 0; z-index: 100000; cursor: pointer; overflow: hidden; display: block;
-         background: radial-gradient(70% 60% at 50% 35%, #1B2A4A 0%, #0B1220 60%, #060A12 100%);
-         animation: intro-out .55s ease-in 2.35s forwards; }
-.skip-cb:checked + .intro { display: none; }
-:root:has(.skip-cb:checked) { --o: 0s !important; }
-@keyframes intro-out { to { opacity: 0; visibility: hidden; } }
-.intro .floor { position: absolute; left: -10%; right: -10%; bottom: -30%; height: 60%; border-radius: 50%;
-                border: 2px solid rgba(96,165,250,.18); }
-.stage { position: absolute; left: 50%; top: 40%; width: 0; height: 0; }
-.board { position: absolute; left: -95px; top: -118px; width: 190px; height: 120px; border: 4px solid #E2E8F0;
-         border-radius: 6px; background: rgba(255,255,255,.06); z-index: 1; }
-.board::after { content: ""; position: absolute; left: 62px; bottom: 6px; width: 58px; height: 42px; border: 3px solid #E2E8F0; }
-.rim { position: absolute; left: -40px; top: -6px; width: 80px; height: 12px; border: 4px solid #F97316; border-radius: 50%; }
-.rim.back { z-index: 1; clip-path: inset(0 0 50% 0); }
-.rim.front { z-index: 3; clip-path: inset(50% 0 0 0); }
-.net { position: absolute; left: -36px; top: 2px; width: 72px; height: 62px; z-index: 3; transform-origin: top; }
-.net svg { width: 100%; height: 100%; display: block; }
-.shot { position: absolute; left: 0; top: 0; z-index: 2; }
-.shot-y, .shot-drop, .shot-ball { position: absolute; left: 0; top: 0; }
-.shot-ball { width: 46px; height: 46px; margin: -30px 0 0 -23px; }
-.shot-ball svg { width: 100%; height: 100%; display: block; }
-.intro-title { position: absolute; left: 0; right: 0; top: calc(40% + 110px); text-align: center;
-               font-family: var(--display); font-size: 46px; color: #fff; letter-spacing: 2px; text-transform: uppercase; }
-.intro-title span { color: #60A5FA; }
-.intro-sub { position: absolute; left: 0; right: 0; top: calc(40% + 170px); text-align: center; color: #94A3B8;
-             font-size: 15px; letter-spacing: 3px; text-transform: uppercase; }
-.intro-skip { position: absolute; right: 24px; bottom: 20px; color: #64748B; font-size: 13px; }
-
-/* Trajectoire : X linéaire, Y en parabole (monte en ralentissant, retombe en accélérant) */
-.shot { animation: shot-x 1.05s linear .25s both; }
-@keyframes shot-x { from { transform: translateX(-42vw); } to { transform: translateX(0); } }
-.shot-y { animation: shot-y 1.05s .25s both; }
-@keyframes shot-y {
-  0%   { transform: translateY(55vh); animation-timing-function: cubic-bezier(.2, .7, .4, 1); }
-  58%  { transform: translateY(-24vh); animation-timing-function: cubic-bezier(.6, 0, .8, .4); }
-  100% { transform: translateY(0); } }
-.shot-drop { animation: shot-drop .45s cubic-bezier(.5, 0, 1, 1) 1.3s forwards; }
-@keyframes shot-drop { to { transform: translateY(95px) scale(.88); opacity: 0; } }
-.shot-ball { animation: shot-spin 1.5s linear .25s both; }
-@keyframes shot-spin { from { transform: rotate(-540deg); } }
-.net { animation: swish .55s ease-out 1.3s both; }
-@keyframes swish { 0% { transform: scaleY(1) scaleX(1); } 35% { transform: scaleY(1.32) scaleX(.86); }
-                   65% { transform: scaleY(.92) scaleX(1.04); } 100% { transform: none; } }
-.intro-title { animation: title-in .6s var(--spring) 1.5s both; }
-@keyframes title-in { from { opacity: 0; transform: scale(.7) translateY(10px); } }
-.intro-sub { animation: fade .5s ease 1.75s both; }
-.intro-skip { animation: fade .4s ease .4s both; }
-
-
 /* ===================== CALENDRIER DES MATCHS ===================== */
 .st-key-datebar { background: var(--card); border: 1px solid var(--border) !important; border-radius: var(--radius);
                   box-shadow: var(--shadow); padding: 10px 14px !important; margin-top: 4px;
@@ -416,7 +373,7 @@ table.std tr:hover .club img { transform: scale(1.15); }
 .st-key-datebar [data-baseweb="input"] { border-radius: 8px !important; }
 .st-key-datebar button { border-radius: 8px !important; }
 .day-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 22px 0 12px; }
-.day-head h2 { font-family: var(--display); font-weight: 400 !important; font-size: 24px; text-transform: uppercase;
+.day-head h2 { font-family: var(--display); font-weight: 400 !important; font-size: 32px; text-transform: uppercase;
                letter-spacing: .5px; color: var(--fg); margin: 0; padding: 0; }
 .day-head h2 span { color: var(--primary); }
 .day-head .sub { font-size: 13px; color: var(--subtle); display: inline-flex; align-items: center; gap: 6px; }
@@ -430,7 +387,7 @@ a.gcard, a.gcard:hover, a.gcard:visited { text-decoration: none !important; colo
 .gcard:focus-visible { outline: 3px solid #93C5FD; outline-offset: 2px; }
 .gcard.sel { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(30,64,175,.15), var(--shadow-hover); }
 .gtop { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--subtle); margin-bottom: 8px; }
-.gtime { font-family: var(--display); font-size: 15px; color: var(--fg); letter-spacing: .5px; }
+.gtime { font-family: var(--num); font-size: 14px; color: var(--fg); letter-spacing: .5px; }
 .gfinal { font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; font-size: 11px; }
 .glive { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--negative);
          text-transform: uppercase; letter-spacing: 1px; font-size: 11px; }
@@ -439,9 +396,9 @@ a.gcard, a.gcard:hover, a.gcard:visited { text-decoration: none !important; colo
 @keyframes blink { 50% { opacity: .25; } }
 .gline { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 10px; padding: 4px 0; color: var(--muted); }
 .gline img { width: 30px; height: 30px; object-fit: contain; }
-.gline .t { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gline .t small { display: block; font-weight: 500; font-size: 11px; color: var(--subtle); }
-.gline .v { font-family: var(--display); font-size: 20px; font-variant-numeric: tabular-nums; }
+.gline .t { font-family: var(--display); font-weight: 400; font-size: 19px; letter-spacing: .5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gline .t small { display: block; font-family: var(--body); font-weight: 500; font-size: 11px; color: var(--subtle); letter-spacing: 0; }
+.gline .v { font-family: var(--num); font-size: 18px; font-variant-numeric: tabular-nums; }
 .gline .v small { font-size: 12px; }
 .gline.lead { color: var(--fg); }
 .gfoot { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--soft); font-size: 12px; color: var(--muted);
@@ -459,12 +416,12 @@ a.gcard, a.gcard:hover, a.gcard:visited { text-decoration: none !important; colo
 .hint .dot { width: 36px; height: 36px; flex-shrink: 0; }
 .hint .dot svg { width: 100%; height: 100%; }
 .detail-head { display: flex; justify-content: space-between; align-items: center; gap: 8px 16px; flex-wrap: wrap; margin: 30px 0 12px; }
-.detail-head h2 { font-family: var(--display); font-weight: 400 !important; font-size: 20px; text-transform: uppercase;
+.detail-head h2 { font-family: var(--display); font-weight: 400 !important; font-size: 26px; text-transform: uppercase;
                   letter-spacing: .5px; color: var(--fg); margin: 0; padding: 0; }
 a.back, a.back:visited { font-size: 13px; color: var(--primary) !important; text-decoration: none !important; font-weight: 600; }
 a.back:hover { text-decoration: underline !important; }
 .result { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; color: var(--fg); font-weight: 600; }
-.result b { font-family: var(--display); font-weight: 400; font-size: 18px; }
+.result b { font-family: var(--num); font-weight: 400; font-size: 18px; }
 .gcard.cascade { animation-duration: .5s; }
 
 @media (max-width: 1150px) {
@@ -488,20 +445,20 @@ a.back:hover { text-decoration: underline !important; }
   .block-container { padding: 0 14px 28px; }
   .nav { padding: 12px 14px; }
   .brand img { height: 32px; }
-  .brand .wm { font-size: 20px; }
+  .brand .wm { font-size: 26px; }
   .brand .tl { font-size: 11px; }
   /* Barre de date : la date sur toute la largeur, puis les 3 boutons sur une ligne */
   .st-key-datebar { padding: 10px !important; }
   .st-key-datebar [data-testid="stHorizontalBlock"] { flex-direction: row !important; flex-wrap: wrap !important; gap: 8px !important; }
   .st-key-datebar [data-testid="stColumn"] { min-width: 0 !important; flex: 1 1 0 !important; width: auto !important; }
   .st-key-datebar [data-testid="stColumn"]:nth-child(2) { order: -1; flex: 1 1 100% !important; }
-  .day-head h2 { font-size: 19px; }
-  .detail-head h2 { font-size: 16px; line-height: 1.3; }
+  .day-head h2 { font-size: 24px; }
+  .detail-head h2 { font-size: 21px; line-height: 1.3; }
   /* Carte du match */
   .hero { padding: 16px 16px 18px; }
   .hero-meta { flex-direction: column; gap: 4px; font-size: 13px; }
-  .tname { font-size: 19px; }
-  .prob { font-size: 46px; }
+  .tname { font-size: 24px; }
+  .prob { font-size: 42px; }
   .prob small { font-size: 20px; }
   .vs { display: none; }
   .hero-foot { flex-direction: column; align-items: flex-start; }
@@ -799,25 +756,7 @@ def _shift(n):
 # ----------------------------------------------------------------------------
 if not st.session_state.get("intro_done") and qp.get("intro") != "0":
     st.session_state["intro_done"] = True
-    net_lines = "".join(f'<path d="M{4 + k * 8} 2 L{10 + k * 6.5} 58"/><path d="M{68 - k * 8} 2 L{62 - k * 6.5} 58"/>' for k in range(5))
-    html(f"""
-    <style>:root {{ --o: 2.3s; }}</style>
-    <input type="checkbox" id="skip-intro" class="skip-cb" aria-hidden="true" tabindex="-1">
-    <label for="skip-intro" class="intro" aria-hidden="true">
-      <div class="floor"></div>
-      <div class="stage">
-        <div class="board"></div>
-        <div class="rim back"></div>
-        <div class="shot"><div class="shot-y"><div class="shot-drop"><div class="shot-ball">{BALL_SVG}</div></div></div></div>
-        <div class="rim front"></div>
-        <div class="net"><svg viewBox="0 0 72 62" fill="none" stroke="#E2E8F0" stroke-width="1.6" stroke-linecap="round">
-          {net_lines}<path d="M6 16 H66 M9 30 H63 M11 44 H61"/></svg></div>
-      </div>
-      <div class="intro-title">Court<span>Side</span></div>
-      <div class="intro-sub">NBA Predictions</div>
-      <div class="intro-skip">Click to skip</div>
-    </label>
-    """)
+    html(intro_html())
 
 # ----------------------------------------------------------------------------
 # Barre de navigation + bandeau des scores
@@ -827,7 +766,8 @@ html(f"""
 <nav class="nav">
   <div class="brand">
     <img src="{NBA_LOGO}" alt="NBA">
-    <div class="wm">Court<span>Side</span></div>  </div>
+    <div class="wm">Court<span>Side</span></div>
+  </div>
   <div class="nav-meta">
     <span class="nav-pill">{icon("calendar", 14)} Season <b>{CURRENT_SEASON}</b></span>
     <span class="nav-pill">{icon("target", 14)} Accuracy <b>67%</b></span>
@@ -1007,7 +947,8 @@ if match.empty:
           <div class="card-head"><h3>Hot teams</h3><span>Last 10 games</span></div>
           <div class="hot">{hot_rows or '<div class="empty">No games played yet.</div>'}</div>
         </section>
-        {model_card if DEBUG else ""}      </div>
+        {model_card if DEBUG else ""}
+      </div>
     </div>
     """)
 
