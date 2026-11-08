@@ -1,20 +1,27 @@
 import os
-from datetime import date
+from datetime import date, timedelta
 
 import joblib
 import pandas as pd
 import streamlit as st
-from nba_api.stats.endpoints import leaguegamefinder
+from nba_api.stats.endpoints import leaguegamefinder, scheduleleaguev2
 
 # ----------------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------------
-CURRENT_SEASON = "2026-27"
+# Les matchs sont rangés par date américaine (comme sur NBA.com), les heures affichées en heure de Cotonou
+US_TZ = "America/New_York"
+LOCAL_TZ = "Africa/Lagos"            # même fuseau que Cotonou (UTC+1)
+US_TODAY = pd.Timestamp.now(tz=US_TZ).date()
+# Saison en cours, détectée automatiquement : une saison NBA commence en octobre
+_start = US_TODAY.year if US_TODAY.month >= 10 else US_TODAY.year - 1
+CURRENT_SEASON = f"{_start}-{str(_start + 1)[-2:]}"
 # Mode développeur : affiché uniquement si on lance l'app avec COURTSIDE_DEBUG=1
 DEBUG = os.environ.get("COURTSIDE_DEBUG") == "1"
 NBA_LOGO = "https://cdn.nba.com/logos/leagues/logo-nba.svg"
 TEAM_LOGO = "https://cdn.nba.com/logos/nba/{team_id}/global/L/logo.svg"
 BASE_FEATURES = ["WIN_PCT_SEASON", "WIN_PCT_LAST10", "PM_LAST10", "REST_DAYS", "B2B"]
+WEEKDAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
 MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin",
           "juil.", "août", "sept.", "oct.", "nov.", "déc."]
 
@@ -35,6 +42,9 @@ ICONS = {
     "scale": '<path d="M12 3v18M5 7h14M5 7l-3 7a4 4 0 0 0 6 0L5 7Zm14 0-3 7a4 4 0 0 0 6 0l-3-7Z"/>',
     "alert": '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4M12 17h.01"/>',
     "clock": '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+    "check": '<path d="M20 6 9 17l-5-5"/>',
+    "x": '<path d="M18 6 6 18M6 6l12 12"/>',
+    "tv": '<rect x="2" y="7" width="20" height="15" rx="2"/><path d="m17 2-5 5-5-5"/>',
     "target": '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
 }
 
@@ -398,6 +408,65 @@ table.std tr:hover .club img { transform: scale(1.15); }
 .intro-sub { animation: fade .5s ease 1.75s both; }
 .intro-skip { animation: fade .4s ease .4s both; }
 
+
+/* ===================== CALENDRIER DES MATCHS ===================== */
+.st-key-datebar { background: var(--card); border: 1px solid var(--border) !important; border-radius: var(--radius);
+                  box-shadow: var(--shadow); padding: 10px 14px !important; margin-top: 4px;
+                  animation: rise var(--t-in) var(--ease) var(--o, 0s) both; }
+.st-key-datebar [data-baseweb="input"] { border-radius: 8px !important; }
+.st-key-datebar button { border-radius: 8px !important; }
+.day-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 22px 0 12px; }
+.day-head h2 { font-family: var(--display); font-weight: 400 !important; font-size: 24px; text-transform: uppercase;
+               letter-spacing: .5px; color: var(--fg); margin: 0; padding: 0; }
+.day-head h2 span { color: var(--primary); }
+.day-head .sub { font-size: 13px; color: var(--subtle); display: inline-flex; align-items: center; gap: 6px; }
+
+.ggrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 14px; }
+a.gcard, a.gcard:hover, a.gcard:visited { text-decoration: none !important; color: inherit !important; }
+.gcard { display: block; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+         padding: 12px 14px 12px; box-shadow: var(--shadow); cursor: pointer;
+         transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) ease, border-color var(--t-fast) ease; }
+.gcard:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); border-color: #93C5FD; }
+.gcard:focus-visible { outline: 3px solid #93C5FD; outline-offset: 2px; }
+.gcard.sel { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(30,64,175,.15), var(--shadow-hover); }
+.gtop { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--subtle); margin-bottom: 8px; }
+.gtime { font-family: var(--display); font-size: 15px; color: var(--fg); letter-spacing: .5px; }
+.gfinal { font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; font-size: 11px; }
+.glive { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--negative);
+         text-transform: uppercase; letter-spacing: 1px; font-size: 11px; }
+.glive::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--negative);
+                 animation: blink 1.2s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: .25; } }
+.gline { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 10px; padding: 4px 0; color: var(--muted); }
+.gline img { width: 30px; height: 30px; object-fit: contain; }
+.gline .t { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gline .t small { display: block; font-weight: 500; font-size: 11px; color: var(--subtle); }
+.gline .v { font-family: var(--display); font-size: 20px; font-variant-numeric: tabular-nums; }
+.gline .v small { font-size: 12px; }
+.gline.lead { color: var(--fg); }
+.gfoot { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--soft); font-size: 12px; color: var(--muted);
+         display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-weight: 600; font-size: 12px; }
+.chip.ok { background: #DCFCE7; color: #14532D; }
+.chip.miss { background: #FEE2E2; color: #991B1B; }
+.chip.fav { background: var(--primary-soft); color: #1E3A8A; }
+.chip.na { background: var(--soft); color: var(--muted); }
+.gfoot .see { color: var(--primary); font-weight: 600; }
+
+.empty { text-align: center; padding: 34px 20px; color: var(--muted); }
+.empty b { display: block; font-family: var(--display); font-weight: 400; font-size: 18px; color: var(--fg); margin-bottom: 6px; }
+.hint { display: flex; align-items: center; gap: 14px; padding: 16px 20px; margin-top: 18px; color: var(--muted); font-size: 14px; }
+.hint .dot { width: 36px; height: 36px; flex-shrink: 0; }
+.hint .dot svg { width: 100%; height: 100%; }
+.detail-head { display: flex; justify-content: space-between; align-items: center; margin: 30px 0 12px; }
+.detail-head h2 { font-family: var(--display); font-weight: 400 !important; font-size: 20px; text-transform: uppercase;
+                  letter-spacing: .5px; color: var(--fg); margin: 0; padding: 0; }
+a.back, a.back:visited { font-size: 13px; color: var(--primary) !important; text-decoration: none !important; font-weight: 600; }
+a.back:hover { text-decoration: underline !important; }
+.result { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; color: var(--fg); font-weight: 600; }
+.result b { font-family: var(--display); font-weight: 400; font-size: 18px; }
+.gcard.cascade { animation-duration: .5s; }
+
 @media (max-width: 1150px) {
   .kpis { grid-template-columns: repeat(2, 1fr); }
   .split { grid-template-columns: 1fr; }
@@ -441,13 +510,15 @@ def load_season_games(season):
     return df.sort_values("GAME_DATE")
 
 
-def team_state(games, team, game_date):
-    """Les features d'une équipe AVANT le match : seulement les matchs joués avant game_date."""
+def team_state(games, team, game_date, last_date=None):
+    """Les features d'une équipe AVANT le match : seulement les matchs joués avant game_date.
+    last_date : date de son match précédent selon le calendrier (sert aux jours de repos)."""
     past = games[(games["TEAM_ABBREVIATION"] == team) & (games["GAME_DATE"] < game_date)]
     if past.empty:
         return None
     last10 = past.tail(10)
-    rest = min((game_date - past["GAME_DATE"].iloc[-1]).days, 4)
+    previous = last_date if last_date is not None else past["GAME_DATE"].iloc[-1]
+    rest = min((game_date - previous).days, 4)
     wins = int(past["WIN"].sum())
     l10_wins = int(last10["WIN"].sum())
     last = past.iloc[-1]
@@ -494,6 +565,13 @@ def latest_scores(games, n=16):
     )
 
 
+def fr_day(d):
+    """« dimanche 8 novembre »"""
+    full_months = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août",
+                   "septembre", "octobre", "novembre", "décembre"]
+    return f"{WEEKDAYS[d.weekday()]} {d.day} {full_months[d.month - 1]}"
+
+
 def fr_date(d, year=True):
     return f"{d.day} {MONTHS[d.month - 1]}" + (f" {d.year}" if year else "")
 
@@ -502,138 +580,6 @@ def form_bars(results):
     label = ", ".join("victoire" if r == "W" else "défaite" for r in results)
     bars = "".join(f'<i class="{r}" style="--i:{j}"></i>' for j, r in enumerate(results))
     return f'<span class="form" role="img" aria-label="5 derniers matchs : {label}">{bars}</span>'
-
-
-# ----------------------------------------------------------------------------
-# Chargement
-# ----------------------------------------------------------------------------
-bundle = load_model()
-model, features = bundle["model"], bundle["features"]
-games = load_season_games(CURRENT_SEASON)
-
-teams_info = (
-    games.drop_duplicates("TEAM_ABBREVIATION")
-    .set_index("TEAM_ABBREVIATION")[["TEAM_ID", "TEAM_NAME"]]
-    .sort_values("TEAM_NAME")
-)
-teams = teams_info.index.tolist()
-full_name = teams_info["TEAM_NAME"].to_dict()
-
-
-def logo(abbr):
-    return TEAM_LOGO.format(team_id=teams_info.loc[abbr, "TEAM_ID"])
-
-
-def color(abbr):
-    return TEAM_COLORS.get(abbr, "#1E40AF")
-
-
-# ----------------------------------------------------------------------------
-# Barre de navigation + bandeau des scores
-# ----------------------------------------------------------------------------
-# Intro « swish » : jouée une seule fois par visite (pas à chaque changement d'équipe)
-if not st.session_state.get("intro_done"):
-    st.session_state["intro_done"] = True
-    net_lines = "".join(f'<path d="M{4 + k * 8} 2 L{10 + k * 6.5} 58"/><path d="M{68 - k * 8} 2 L{62 - k * 6.5} 58"/>' for k in range(5))
-    html(f"""
-    <style>:root {{ --o: 2.3s; }}</style>
-    <input type="checkbox" id="skip-intro" class="skip-cb" aria-hidden="true" tabindex="-1">
-    <label for="skip-intro" class="intro" aria-hidden="true">
-      <div class="floor"></div>
-      <div class="stage">
-        <div class="board"></div>
-        <div class="rim back"></div>
-        <div class="shot"><div class="shot-y"><div class="shot-drop"><div class="shot-ball">{BALL_SVG}</div></div></div></div>
-        <div class="rim front"></div>
-        <div class="net"><svg viewBox="0 0 72 62" fill="none" stroke="#E2E8F0" stroke-width="1.6" stroke-linecap="round">
-          {net_lines}<path d="M6 16 H66 M9 30 H63 M11 44 H61"/></svg></div>
-      </div>
-      <div class="intro-title">Court<span>Side</span></div>
-      <div class="intro-sub">Pronostics NBA</div>
-      <div class="intro-skip">Cliquer pour passer</div>
-    </label>
-    """)
-
-scores = latest_scores(games)
-html(f"""
-<nav class="nav">
-  <div class="brand">
-    <img src="{NBA_LOGO}" alt="NBA">
-    <div><div class="wm">Court<span>Side</span></div><div class="tl">Pronostics NBA par machine learning</div></div>
-  </div>
-  <div class="nav-meta">
-    <span class="nav-pill">{icon("calendar", 14)} Saison <b>{CURRENT_SEASON}</b></span>
-    <span class="nav-pill">{icon("target", 14)} Précision <b>67 %</b></span>
-  </div>
-</nav>
-<div class="ticker" aria-hidden="true"><div class="ticker-track">
-  <span class="tag">Derniers scores</span>{scores}<span class="tag">Derniers scores</span>{scores}
-</div></div>
-""")
-
-left, main = st.columns([1, 3.6], gap="large")
-
-# ----------------------------------------------------------------------------
-# Colonne de gauche : sélection + modèle
-# ----------------------------------------------------------------------------
-with left:
-    with st.container(border=True, key="pick"):
-        html('<div class="panel-title">Choisir un match</div>'
-             '<div class="panel-sub">Le modèle utilise la forme des équipes avant cette date.</div>')
-        home = st.selectbox("Équipe à domicile", teams, format_func=lambda t: full_name[t])
-        away = st.selectbox("Équipe à l'extérieur", teams, index=1, format_func=lambda t: full_name[t])
-        game_date = pd.Timestamp(st.date_input("Date du match", date.today(), format="DD/MM/YYYY"))
-
-    html(f"""
-    <div class="card model" style="--d:.1s">
-      <div class="eyebrow">Le modèle</div>
-      <div class="big num">{count(67)} %</div>
-      <div class="cap">de bonnes prédictions sur 2 418 matchs jamais vus</div>
-      <div class="gauge"><div class="fill" style="width:67%"></div><div class="mark" style="left:55%"></div></div>
-      <div class="legend"><span>Baseline 55 %</span><span>Modèle 67 %</span></div>
-      <dl>
-        <dt>Algorithme</dt><dd>Régression logistique</dd>
-        <dt>Variables</dt><dd>10</dd>
-        <dt>Entraînement</dt><dd class="num">13 023 matchs</dd>
-        <dt>Saisons</dt><dd>2015 à 2026</dd>
-      </dl>
-    </div>
-    """)
-
-if home == away:
-    main.warning("Choisis deux équipes différentes.")
-    st.stop()
-
-h = team_state(games, home, game_date)
-a = team_state(games, away, game_date)
-if h is None or a is None:
-    main.error("Une des deux équipes n'a encore joué aucun match avant cette date.")
-    st.stop()
-
-# ----------------------------------------------------------------------------
-# Prédiction
-# ----------------------------------------------------------------------------
-row = {f"{k}_HOME": h[k] for k in BASE_FEATURES} | {f"{k}_AWAY": a[k] for k in BASE_FEATURES}
-X = pd.DataFrame([row])[features]
-p_home = float(model.predict_proba(X)[0, 1])
-p_away = 1 - p_home
-
-fav, p_fav = (home, p_home) if p_home >= 0.5 else (away, p_away)
-if p_fav < 0.55:
-    verdict = f'<span class="verdict even">{icon("scale")} Match très serré, pas de vrai favori</span>'
-elif p_fav < 0.65:
-    verdict = f'<span class="verdict lean">{icon("trend")} Léger avantage {full_name[fav]}</span>'
-else:
-    verdict = f'<span class="verdict strong">{icon("trend")} {full_name[fav]} nettement favori</span>'
-
-note = ""
-if min(h["GAMES"], a["GAMES"]) < 10:
-    note = (f'<span class="note">{icon("alert", 14)} Début de saison : {h["GAMES"]} et {a["GAMES"]} '
-            f'matchs joués, prédiction moins fiable</span>')
-
-home_cls, away_cls = ("", "dog") if p_home >= 0.5 else ("dog", "")
-home_fav, away_fav = ("fav", "") if p_home >= 0.5 else ("", "fav")
-table = standings(games, game_date)
 
 
 # ----------------------------------------------------------------------------
@@ -678,29 +624,401 @@ def game_card(k, team, state):
 
 
 # ----------------------------------------------------------------------------
-# Tableau de bord
+# Calendrier de la saison
 # ----------------------------------------------------------------------------
-with main:
+@st.cache_data(ttl=3600)  # le calendrier (horaires, scores, statuts) est rafraîchi au maximum une fois par heure
+def load_schedule(season):
+    df = scheduleleaguev2.ScheduleLeagueV2(league_id="00", season=season, timeout=60).get_data_frames()[0]
+    df["gameId"] = df["gameId"].astype(str).str.zfill(10)
+    # 002 = saison régulière, 004 = play-offs, 005 = play-in (on écarte la présaison et le All-Star Game)
+    df = df[df["gameId"].str[:3].isin(["002", "004", "005"])].drop_duplicates("gameId").copy()
+    df = df[(df["homeTeam_teamTricode"].fillna("") != "") & (df["awayTeam_teamTricode"].fillna("") != "")]
+    df["US_DATE"] = pd.to_datetime(df["gameDateEst"].astype(str).str[:10], format="mixed", errors="coerce")
+    df["START_UTC"] = pd.to_datetime(df["gameDateTimeUTC"], utc=True, errors="coerce")
+    df["gameStatus"] = pd.to_numeric(df["gameStatus"], errors="coerce").fillna(1).astype(int)
+    for side in ("homeTeam", "awayTeam"):
+        df[f"{side}_score"] = pd.to_numeric(df[f"{side}_score"], errors="coerce").fillna(0).astype(int)
+    return df.dropna(subset=["US_DATE"]).sort_values(["US_DATE", "START_UTC"]).reset_index(drop=True)
+
+
+# ----------------------------------------------------------------------------
+# Chargement
+# ----------------------------------------------------------------------------
+bundle = load_model()
+model, features = bundle["model"], bundle["features"]
+games = load_season_games(CURRENT_SEASON)
+schedule = load_schedule(CURRENT_SEASON)
+
+# Équipes : identifiant (pour les logos) et nom complet, tirés du calendrier
+teams_info = pd.concat([
+    schedule[[f"{s}_teamTricode", f"{s}_teamId", f"{s}_teamCity", f"{s}_teamName"]]
+    .set_axis(["TRI", "ID", "CITY", "NAME"], axis=1)
+    for s in ("homeTeam", "awayTeam")
+]).drop_duplicates("TRI").set_index("TRI")
+full_name = (teams_info["CITY"] + " " + teams_info["NAME"]).to_dict()
+
+# Dates de tous les matchs prévus de chaque équipe (pour calculer les jours de repos)
+team_dates = {
+    t: sorted(set(schedule.loc[(schedule["homeTeam_teamTricode"] == t) | (schedule["awayTeam_teamTricode"] == t), "US_DATE"]))
+    for t in teams_info.index
+}
+
+
+def logo(abbr):
+    return TEAM_LOGO.format(team_id=int(teams_info.loc[abbr, "ID"])) if abbr in teams_info.index else NBA_LOGO
+
+
+def color(abbr):
+    return TEAM_COLORS.get(abbr, "#1E40AF")
+
+
+def previous_game(team, day):
+    before = [d for d in team_dates.get(team, []) if d < day]
+    return before[-1] if before else None
+
+
+def predict(home_t, away_t, day):
+    """Probabilité de victoire de l'équipe à domicile, avec la forme des deux équipes avant ce jour."""
+    hs = team_state(games, home_t, day, previous_game(home_t, day))
+    as_ = team_state(games, away_t, day, previous_game(away_t, day))
+    if hs is None or as_ is None:
+        return None, hs, as_
+    x = pd.DataFrame([{f"{k}_HOME": hs[k] for k in BASE_FEATURES} | {f"{k}_AWAY": as_[k] for k in BASE_FEATURES}])[features]
+    return float(model.predict_proba(x)[0, 1]), hs, as_
+
+
+def local_time(g):
+    """Heure de Cotonou. Si le match tombe le lendemain à Cotonou, on ajoute le jour (« lun. 02:30 »)."""
+    if pd.isna(g.START_UTC):
+        return "Horaire à venir"
+    t = g.START_UTC.tz_convert(LOCAL_TZ)
+    hhmm = t.strftime("%H:%M")
+    return hhmm if t.date() == g.US_DATE.date() else f"{WEEKDAYS[t.weekday()][:3]}. {hhmm}"
+
+
+def pct(p):
+    """Pourcentage affiché entre 1 et 99 : le modèle n'est jamais certain à 100 %."""
+    return min(99, max(1, round(p * 100)))
+
+
+def link(day, game_id=None):
+    """Lien interne : garde la date, ouvre un match, et ne rejoue pas l'intro."""
+    return f"?date={day.isoformat()}" + (f"&match={game_id}" if game_id else "") + "&intro=0"
+
+
+# ----------------------------------------------------------------------------
+# Date choisie et match sélectionné (dans l'adresse de la page : liens partageables)
+# ----------------------------------------------------------------------------
+qp = st.query_params
+
+
+def _parse(s):
+    try:
+        return date.fromisoformat(s)
+    except (TypeError, ValueError):
+        return None
+
+
+if "day" not in st.session_state:
+    st.session_state["day"] = _parse(qp.get("date")) or US_TODAY
+
+
+def _clear_match():
+    if "match" in st.query_params:
+        del st.query_params["match"]
+
+
+def _shift(n):
+    st.session_state["day"] = st.session_state["day"] + timedelta(days=n)
+    _clear_match()
+
+
+# ----------------------------------------------------------------------------
+# Intro « swish » : une seule fois par visite, jamais en revenant d'un clic sur un match
+# ----------------------------------------------------------------------------
+if not st.session_state.get("intro_done") and qp.get("intro") != "0":
+    st.session_state["intro_done"] = True
+    net_lines = "".join(f'<path d="M{4 + k * 8} 2 L{10 + k * 6.5} 58"/><path d="M{68 - k * 8} 2 L{62 - k * 6.5} 58"/>' for k in range(5))
+    html(f"""
+    <style>:root {{ --o: 2.3s; }}</style>
+    <input type="checkbox" id="skip-intro" class="skip-cb" aria-hidden="true" tabindex="-1">
+    <label for="skip-intro" class="intro" aria-hidden="true">
+      <div class="floor"></div>
+      <div class="stage">
+        <div class="board"></div>
+        <div class="rim back"></div>
+        <div class="shot"><div class="shot-y"><div class="shot-drop"><div class="shot-ball">{BALL_SVG}</div></div></div></div>
+        <div class="rim front"></div>
+        <div class="net"><svg viewBox="0 0 72 62" fill="none" stroke="#E2E8F0" stroke-width="1.6" stroke-linecap="round">
+          {net_lines}<path d="M6 16 H66 M9 30 H63 M11 44 H61"/></svg></div>
+      </div>
+      <div class="intro-title">Court<span>Side</span></div>
+      <div class="intro-sub">Pronostics NBA</div>
+      <div class="intro-skip">Cliquer pour passer</div>
+    </label>
+    """)
+
+# ----------------------------------------------------------------------------
+# Barre de navigation + bandeau des scores
+# ----------------------------------------------------------------------------
+scores = latest_scores(games)
+html(f"""
+<nav class="nav">
+  <div class="brand">
+    <img src="{NBA_LOGO}" alt="NBA">
+    <div><div class="wm">Court<span>Side</span></div><div class="tl">Pronostics NBA par machine learning</div></div>
+  </div>
+  <div class="nav-meta">
+    <span class="nav-pill">{icon("calendar", 14)} Saison <b>{CURRENT_SEASON}</b></span>
+    <span class="nav-pill">{icon("target", 14)} Précision <b>67 %</b></span>
+  </div>
+</nav>
+<div class="ticker" aria-hidden="true"><div class="ticker-track">
+  <span class="tag">Derniers scores</span>{scores}<span class="tag">Derniers scores</span>{scores}
+</div></div>
+""")
+
+# ----------------------------------------------------------------------------
+# Choix de la date
+# ----------------------------------------------------------------------------
+with st.container(key="datebar"):
+    c_prev, c_date, c_next, c_today = st.columns([1, 2.2, 1, 1], vertical_alignment="bottom")
+    c_prev.button("Veille", icon=":material/chevron_left:", on_click=_shift, args=(-1,), use_container_width=True)
+    c_date.date_input("Date des matchs (date américaine)", key="day", format="DD/MM/YYYY", on_change=_clear_match)
+    c_next.button("Lendemain", icon=":material/chevron_right:",
+                  on_click=_shift, args=(1,), use_container_width=True)
+    c_today.button("Aujourd'hui", on_click=lambda: (st.session_state.update(day=US_TODAY), _clear_match()),
+                   use_container_width=True)
+
+day = st.session_state["day"]
+day_ts = pd.Timestamp(day)
+st.query_params["date"] = day.isoformat()
+selected = st.query_params.get("match")
+
+day_games = schedule[schedule["US_DATE"] == day_ts]
+n = len(day_games)
+
+# ----------------------------------------------------------------------------
+# Grille des matchs du jour
+# ----------------------------------------------------------------------------
+def game_tile(k, g):
+    hm, aw = g.homeTeam_teamTricode, g.awayTeam_teamTricode
+    p, _, _ = predict(hm, aw, day_ts)
+    status = g.gameStatus
+    if status == 3:
+        top = '<span class="gfinal">Terminé</span>'
+    elif status == 2:
+        top = '<span class="glive">En cours</span>'
+    else:
+        top = f'<span class="gtime">{local_time(g)}</span>'
+
+    def line(t, side_p, score, lead):
+        right = (f'<span class="v">{score}</span>' if status >= 2
+                 else (f'<span class="v">{pct(side_p)}<small>%</small></span>' if side_p is not None else '<span class="v">–</span>'))
+        return (f'<div class="gline {"lead" if lead else ""}"><img src="{logo(t)}" alt="">'
+                f'<span class="t">{t}<small>{full_name.get(t, t)}</small></span>{right}</div>')
+
+    hs, as_ = g.homeTeam_score, g.awayTeam_score
+    if status >= 2:
+        home_lead, away_lead = hs > as_, as_ > hs
+    else:
+        home_lead = p is not None and p >= .5
+        away_lead = p is not None and p < .5
+    # Convention des tableaux de scores NBA : l'équipe à l'extérieur en haut
+    body = line(aw, None if p is None else 1 - p, as_, away_lead) + line(hm, p, hs, home_lead)
+
+    if p is None:
+        foot = '<span class="chip na">Pas encore assez de matchs</span>'
+    elif status == 3:
+        ok = (p >= .5) == (hs > as_)
+        foot = (f'<span class="chip ok">{icon("check", 12)} Pronostic juste</span>' if ok
+                else f'<span class="chip miss">{icon("x", 12)} Pronostic manqué</span>')
+    else:
+        fav_t, fav_p = (hm, p) if p >= .5 else (aw, 1 - p)
+        foot = f'<span class="chip fav">Favori : {fav_t} {pct(fav_p)} %</span>'
+    sel = "sel" if g.gameId == selected else ""
+    return (f'<a class="gcard cascade {sel}" href="{link(day, g.gameId)}" target="_self" style="--d0:.15s;--i:{k}"'
+            f' aria-label="{full_name.get(aw, aw)} à {full_name.get(hm, hm)}, voir le pronostic">'
+            f'<div class="gtop">{top}<span>{g.arenaCity if isinstance(g.arenaCity, str) else ""}</span></div>'
+            f'{body}<div class="gfoot">{foot}<span class="see">Voir</span></div></a>')
+
+
+table = standings(games, day_ts)
+hot = table.sort_values(["L10", "PM"], ascending=False).head(5).reset_index(drop=True)
+hot_rows = "".join(
+    f"""
+    <div class="hot-row cascade" style="--d0:.9s;--i:{k}">
+      <span class="rk">{k + 1}</span><img src="{logo(r.TEAM)}" alt="">
+      <span class="n">{full_name.get(r.TEAM, r.TEAM)}</span>
+      <div class="track"><div style="width:{r.L10:.0%};background:{color(r.TEAM)};--i:{k + 3}"></div></div>
+      <span class="p">{r.L10:.0%}</span>
+    </div>
+    """
+    for k, r in hot.iterrows()
+)
+model_card = f"""
+<div class="card model" style="--d:.1s;margin-top:0">
+  <div class="eyebrow">Le modèle</div>
+  <div class="big num">{count(67)} %</div>
+  <div class="cap">de bonnes prédictions sur 2 418 matchs jamais vus</div>
+  <div class="gauge"><div class="fill" style="width:67%"></div><div class="mark" style="left:55%"></div></div>
+  <div class="legend"><span>Baseline 55 %</span><span>Modèle 67 %</span></div>
+  <dl>
+    <dt>Algorithme</dt><dd>Régression logistique</dd>
+    <dt>Variables</dt><dd>10</dd>
+    <dt>Entraînement</dt><dd class="num">13 023 matchs</dd>
+    <dt>Saisons</dt><dd>2015 à 2026</dd>
+  </dl>
+</div>
+"""
+
+
+def standings_card(highlight=()):
+    shown = table[(table.index < 10) | table["TEAM"].isin(list(highlight))]
+    rows, prev = [], -1
+    for n_row, (i, r) in enumerate(shown.iterrows()):
+        if i != prev + 1:
+            rows.append('<tr class="gap"><td colspan="6">···</td></tr>')
+        prev = i
+        rows.append(f"""
+        <tr class="{'sel' if r.TEAM in highlight else ''} cascade" style="--d0:.6s;--i:{n_row}">
+          <td class="rk">{i + 1}</td>
+          <td><div class="club"><img src="{logo(r.TEAM)}" alt="">{full_name.get(r.TEAM, r.TEAM)}</div></td>
+          <td class="r">{r.W}-{r.L}</td>
+          <td class="r">{r.PCT:.0%}</td>
+          <td class="r {'pos' if r.PM >= 0 else 'neg'}">{r.PM:+.1f}</td>
+          <td>{form_bars(r.LAST5)}</td>
+        </tr>
+        """)
+    return f"""
+    <section class="card" style="--d:.4s">
+      <div class="card-head"><h3>Classement</h3><span>Saison {CURRENT_SEASON} · avant le {fr_date(day_ts, year=False)}</span></div>
+      <div class="tbl-wrap">
+        <table class="std">
+          <tr><th>#</th><th>Équipe</th><th class="r">V-D</th><th class="r">%</th><th class="r">Écart</th><th>Forme</th></tr>
+          {"".join(rows)}
+        </table>
+      </div>
+    </section>
+    """
+
+
+def render_grid(title=None):
+    html(f"""
+    <div class="day-head">
+      <h2>{title or 'Matchs du <span>' + fr_day(day) + '</span>'}</h2>
+      <span class="sub">{icon("clock", 13)} {n} match{"s" if n > 1 else ""} · heures affichées en heure de Cotonou</span>
+    </div>
+    """)
+    if n == 0:
+        html(f"""
+        <div class="card empty">
+          <b>Aucun match ce jour-là</b>
+          Utilise les flèches pour passer à la veille ou au lendemain.
+        </div>
+        """)
+    else:
+        html(f'<div class="ggrid">{"".join(game_tile(k, g) for k, g in enumerate(day_games.itertuples()))}</div>')
+
+
+
+match = day_games[day_games["gameId"] == selected] if selected else day_games.iloc[0:0]
+
+# ----------------------------------------------------------------------------
+# Aucun match sélectionné : invitation à cliquer + vue d'ensemble
+# ----------------------------------------------------------------------------
+if match.empty:
+    render_grid()
+    if n:
+        html(f"""
+        <div class="card hint" style="--d:.3s">
+          <span class="dot">{BALL_SVG}</span>
+          Clique sur un match pour voir le pronostic détaillé : probabilités, comparaison des deux équipes et derniers résultats.
+        </div>
+        """)
+    html(f"""
+    <div class="split" style="margin-top:18px">
+      {standings_card()}
+      <div class="stack">
+        <section class="card" style="--d:.5s">
+          <div class="card-head"><h3>En forme</h3><span>10 derniers matchs</span></div>
+          <div class="hot">{hot_rows}</div>
+        </section>
+        {model_card}
+      </div>
+    </div>
+    """)
+
+# ----------------------------------------------------------------------------
+# Match sélectionné : le pronostic détaillé
+# ----------------------------------------------------------------------------
+else:
+    g = next(match.itertuples())
+    home, away = g.homeTeam_teamTricode, g.awayTeam_teamTricode
+    p_home, h, a = predict(home, away, day_ts)
+
+    html(f"""
+    <div class="detail-head" style="margin-top:22px">
+      <h2>Pronostic · <span style="color:var(--primary)">{full_name[away]} à {full_name[home]}</span></h2>
+      <a class="back" href="{link(day)}" target="_self">Fermer le pronostic</a>
+    </div>
+    """)
+
+    if p_home is None:
+        html("""
+        <div class="card empty">
+          <b>Pas encore de pronostic pour ce match</b>
+          Une des deux équipes n'a joué aucun match avant cette date : le modèle n'a pas de forme à analyser.
+        </div>
+        """)
+        st.stop()
+
+    p_away = 1 - p_home
+    fav, p_fav = (home, p_home) if p_home >= 0.5 else (away, p_away)
+    if p_fav < 0.55:
+        verdict = f'<span class="verdict even">{icon("scale")} Match très serré, pas de vrai favori</span>'
+    elif p_fav < 0.65:
+        verdict = f'<span class="verdict lean">{icon("trend")} Léger avantage {full_name[fav]}</span>'
+    else:
+        verdict = f'<span class="verdict strong">{icon("trend")} {full_name[fav]} nettement favori</span>'
+
+    # Match terminé : on montre le score final et si le modèle avait raison
+    if g.gameStatus == 3:
+        ok = (p_home >= .5) == (g.homeTeam_score > g.awayTeam_score)
+        chip = (f'<span class="chip ok">{icon("check", 12)} Le modèle avait vu juste</span>' if ok
+                else f'<span class="chip miss">{icon("x", 12)} Le modèle s\'est trompé</span>')
+        verdict += (f'<span class="result">Score final <b>{away} {g.awayTeam_score} – {g.homeTeam_score} {home}</b>'
+                    f'{chip}</span>')
+
+    note = ""
+    if min(h["GAMES"], a["GAMES"]) < 10:
+        note = (f'<span class="note">{icon("alert", 14)} Début de saison : {h["GAMES"]} et {a["GAMES"]} '
+                f'matchs joués, prédiction moins fiable</span>')
+
+    home_cls, away_cls = ("", "dog") if p_home >= 0.5 else ("dog", "")
+    home_fav, away_fav = ("fav", "") if p_home >= 0.5 else ("", "fav")
+    arena = g.arenaName if isinstance(g.arenaName, str) and g.arenaName else full_name[home]
+
     hero = f"""
     <section class="card hero" style="--home:{color(home)};--away:{color(away)}">
       <div class="hero-top">
         <span class="eyebrow">Probabilité de victoire</span>
         <div class="hero-meta">
-          <span>{icon("calendar")} {fr_date(game_date)}</span>
-          <span>{icon("pin")} {full_name[home]} reçoit</span>
+          <span>{icon("calendar")} {fr_date(day_ts)} · {local_time(g)} à Cotonou</span>
+          <span>{icon("pin")} {arena}</span>
         </div>
       </div>
       <div class="duel" role="img" aria-label="{full_name[home]} {p_home:.0%}, {full_name[away]} {p_away:.0%}">
         <div class="side home {home_fav}">
           <div class="logo-wrap" style="--c:{color(home)}"><span class="halo"></span><img src="{logo(home)}" alt="{full_name[home]}"></div>
           <div><div class="tname">{full_name[home]}</div><div class="trec num">{h['RECORD']} · Domicile</div>
-               <div class="prob {home_cls}">{flaps(round(p_home * 100), .55)}<small>%</small></div></div>
+               <div class="prob {home_cls}">{flaps(pct(p_home), .55)}<small>%</small></div></div>
         </div>
-        <div class="vs"><div class="v">VS</div><div class="l">{fr_date(game_date, year=False)}</div></div>
+        <div class="vs"><div class="v">VS</div><div class="l">{fr_date(day_ts, year=False)}</div></div>
         <div class="side away {away_fav}">
           <div class="logo-wrap" style="--c:{color(away)}"><span class="halo"></span><img src="{logo(away)}" alt="{full_name[away]}"></div>
           <div><div class="tname">{full_name[away]}</div><div class="trec num">{a['RECORD']} · Extérieur</div>
-               <div class="prob {away_cls}">{flaps(round(p_away * 100), .7)}<small>%</small></div></div>
+               <div class="prob {away_cls}">{flaps(100 - pct(p_home), .7)}<small>%</small></div></div>
         </div>
       </div>
       <div class="roll" aria-hidden="true" style="--p:{p_home:.1%}">
@@ -722,50 +1040,12 @@ with main:
               f"{b2b_h}{h['REST_DAYS']} j", f"{b2b_a}{a['REST_DAYS']} j", lambda v: v / 4)
     )
 
-    shown = table[(table.index < 10) | table["TEAM"].isin([home, away])]
-    rows, prev = [], -1
-    for n_row, (i, r) in enumerate(shown.iterrows()):
-        if i != prev + 1:
-            rows.append('<tr class="gap"><td colspan="6">···</td></tr>')
-        prev = i
-        rows.append(f"""
-        <tr class="{'sel' if r.TEAM in (home, away) else ''} cascade" style="--d0:.6s;--i:{n_row}">
-          <td class="rk">{i + 1}</td>
-          <td><div class="club"><img src="{logo(r.TEAM)}" alt="">{full_name[r.TEAM]}</div></td>
-          <td class="r">{r.W}-{r.L}</td>
-          <td class="r">{r.PCT:.0%}</td>
-          <td class="r {'pos' if r.PM >= 0 else 'neg'}">{r.PM:+.1f}</td>
-          <td>{form_bars(r.LAST5)}</td>
-        </tr>
-        """)
-
-    hot = table.sort_values(["L10", "PM"], ascending=False).head(5).reset_index(drop=True)
-    hot_rows = "".join(
-        f"""
-        <div class="hot-row cascade" style="--d0:.9s;--i:{k}">
-          <span class="rk">{k + 1}</span><img src="{logo(r.TEAM)}" alt="">
-          <span class="n">{full_name[r.TEAM]}</span>
-          <div class="track"><div style="width:{r.L10:.0%};background:{color(r.TEAM)};--i:{k + 3}"></div></div>
-          <span class="p">{r.L10:.0%}</span>
-        </div>
-        """
-        for k, r in hot.iterrows()
-    )
-
     html(f"""
     <div class="dash">
       {hero}
       <div class="kpis">{kpis}</div>
       <div class="split">
-        <section class="card" style="--d:.4s">
-          <div class="card-head"><h3>Classement</h3><span>Saison {CURRENT_SEASON} · avant le {fr_date(game_date, year=False)}</span></div>
-          <div class="tbl-wrap">
-            <table class="std">
-              <tr><th>#</th><th>Équipe</th><th class="r">V-D</th><th class="r">%</th><th class="r">Écart</th><th>Forme</th></tr>
-              {"".join(rows)}
-            </table>
-          </div>
-        </section>
+        {standings_card((home, away))}
         <div class="stack">
           <section class="card" style="--d:.5s">
             <div class="card-head"><h3>Derniers matchs</h3><span>{icon("clock", 13)} avant ce match</span></div>
@@ -780,7 +1060,11 @@ with main:
     </div>
     """)
 
+    render_grid(f"Autres matchs du <span>{fr_day(day)}</span>")
+
     if DEBUG:
+        row = {f"{k}_HOME": h[k] for k in BASE_FEATURES} | {f"{k}_AWAY": a[k] for k in BASE_FEATURES}
+        X = pd.DataFrame([row])[features]
         with st.expander("Détail : les 10 valeurs envoyées au modèle"):
             st.dataframe(X.T.rename(columns={0: "valeur"}).round(3), use_container_width=True)
 
