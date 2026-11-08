@@ -1,3 +1,4 @@
+import os
 from datetime import date
 
 import joblib
@@ -9,6 +10,8 @@ from nba_api.stats.endpoints import leaguegamefinder
 # Configuration
 # ----------------------------------------------------------------------------
 CURRENT_SEASON = "2026-27"
+# Mode développeur : affiché uniquement si on lance l'app avec COURTSIDE_DEBUG=1
+DEBUG = os.environ.get("COURTSIDE_DEBUG") == "1"
 NBA_LOGO = "https://cdn.nba.com/logos/leagues/logo-nba.svg"
 TEAM_LOGO = "https://cdn.nba.com/logos/nba/{team_id}/global/L/logo.svg"
 BASE_FEATURES = ["WIN_PCT_SEASON", "WIN_PCT_LAST10", "PM_LAST10", "REST_DAYS", "B2B"]
@@ -60,7 +63,7 @@ def count(value: int) -> str:
 # ----------------------------------------------------------------------------
 html("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Russo+One&family=Chakra+Petch:wght@400;500;600;700&display=swap');
 
 :root {
   --bg: #F8FAFC;
@@ -77,8 +80,8 @@ html("""
   --radius: 12px;
   --shadow: 0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.06);
   --shadow-hover: 0 10px 24px -8px rgba(15,23,42,.18);
-  --display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
-  --body: 'Barlow', -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --display: 'Russo One', 'Arial Black', sans-serif;
+  --body: 'Chakra Petch', -apple-system, 'Segoe UI', Roboto, sans-serif;
   /* Jetons de mouvement : une seule courbe et trois durées pour toute l'app */
   --ease: cubic-bezier(.16, 1, .3, 1);
   --spring: cubic-bezier(.34, 1.56, .64, 1);
@@ -88,6 +91,8 @@ html("""
 }
 
 html, body, .stApp, [class*="css"], button, input, label, p { font-family: var(--body) !important; }
+.wm, .panel-title, .card-head h3, .model .big, .tname, .prob, .vs .v, .cmp .val, .g-line .s, .ticker-track .tag {
+  font-weight: 400 !important; font-synthesis: none; }
 .stApp { background: var(--bg); color: var(--fg); overflow-x: hidden; }
 header[data-testid="stHeader"] { display: none; }
 #MainMenu, footer { visibility: hidden; }
@@ -100,7 +105,7 @@ header[data-testid="stHeader"] { display: none; }
        align-items: center; justify-content: space-between; }
 .brand { display: flex; align-items: center; gap: 14px; }
 .brand img { height: 40px; }
-.brand .wm { font-family: var(--display); font-weight: 700; font-size: 26px; letter-spacing: .5px;
+.brand .wm { font-family: var(--display); font-weight: 700; font-size: 24px; letter-spacing: 1px;
              color: #fff; text-transform: uppercase; line-height: 1; }
 .brand .wm span { color: #60A5FA; }
 .brand .tl { font-size: 12px; color: #94A3B8; margin-top: 3px; }
@@ -116,7 +121,7 @@ header[data-testid="stHeader"] { display: none; }
 .ticker:hover .ticker-track { animation-play-state: paused; }
 .ticker-track span { font-size: 13px; color: var(--muted); margin: 0 22px; }
 .ticker-track b { color: var(--fg); font-weight: 700; font-variant-numeric: tabular-nums; }
-.ticker-track .tag { font-family: var(--display); font-weight: 700; font-size: 14px; letter-spacing: 1px;
+.ticker-track .tag { font-family: var(--display); font-weight: 700; font-size: 12px; letter-spacing: 1px;
                      text-transform: uppercase; color: var(--primary); margin: 0 22px 0 28px; }
 @keyframes scroll { to { transform: translateX(-50%); } }
 
@@ -129,7 +134,7 @@ header[data-testid="stHeader"] { display: none; }
   transition: border-color var(--t-fast) ease, box-shadow var(--t-fast) ease; cursor: pointer; }
 .st-key-pick [data-baseweb="select"] > div:hover, .st-key-pick [data-baseweb="input"]:hover {
   border-color: #94A3B8 !important; box-shadow: 0 0 0 3px rgba(30,64,175,.06); }
-.panel-title { font-family: var(--display); font-size: 18px; font-weight: 700; text-transform: uppercase;
+.panel-title { font-family: var(--display); font-size: 16px; font-weight: 700; text-transform: uppercase;
                letter-spacing: .6px; color: var(--fg); margin: 2px 0 2px; }
 .panel-sub { font-size: 13px; color: var(--subtle); margin-bottom: 4px; }
 
@@ -138,14 +143,14 @@ header[data-testid="stHeader"] { display: none; }
         transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) ease; }
 .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
 .card-head { display: flex; justify-content: space-between; align-items: baseline; padding: 16px 20px 10px; }
-.card-head h3 { font-family: var(--display); font-size: 19px; font-weight: 700; text-transform: uppercase;
+.card-head h3 { font-family: var(--display); font-size: 16px; font-weight: 700; text-transform: uppercase;
                 letter-spacing: .6px; color: var(--fg); margin: 0; padding: 0; }
 .card-head span { font-size: 13px; color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
 .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 1.4px; text-transform: uppercase; color: var(--subtle); }
 
 /* Modèle (colonne de gauche) */
 .model { padding: 18px 20px; margin-top: 16px; }
-.model .big { font-family: var(--display); font-size: 44px; font-weight: 700; color: var(--fg); line-height: 1; margin-top: 6px; }
+.model .big { font-family: var(--display); font-size: 40px; font-weight: 700; color: var(--fg); line-height: 1; margin-top: 6px; }
 .model .cap { font-size: 13px; color: var(--muted); margin-top: 4px; }
 .model .gauge { position: relative; height: 8px; border-radius: 999px; background: var(--soft); margin: 14px 0 8px; }
 .model .gauge .fill { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--primary); }
@@ -172,12 +177,12 @@ header[data-testid="stHeader"] { display: none; }
 .logo-wrap { position: relative; flex-shrink: 0; width: 104px; height: 104px; display: grid; place-items: center; }
 .logo-wrap img { height: 104px; width: 104px; object-fit: contain; filter: drop-shadow(0 6px 14px rgba(15,23,42,.14)); }
 .halo { position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--c); opacity: 0; }
-.tname { font-family: var(--display); font-size: 30px; font-weight: 700; text-transform: uppercase;
+.tname { font-family: var(--display); font-size: 24px; font-weight: 700; text-transform: uppercase;
          color: var(--fg); line-height: 1; letter-spacing: .3px; }
 .trec { font-size: 14px; color: var(--muted); margin-top: 6px; }
-.prob { font-family: var(--display); font-size: 76px; font-weight: 700; line-height: .95; margin-top: 8px;
+.prob { font-family: var(--display); font-size: 64px; font-weight: 700; line-height: .95; margin-top: 8px;
         font-variant-numeric: tabular-nums; color: var(--fg); }
-.prob small { font-size: 34px; margin-left: 2px; }
+.prob small { font-size: 28px; margin-left: 2px; }
 .prob.dog { color: var(--subtle); }
 .vs { text-align: center; }
 .vs .v { font-family: var(--display); font-size: 22px; font-weight: 700; color: var(--subtle); letter-spacing: 2px; }
@@ -202,7 +207,7 @@ header[data-testid="stHeader"] { display: none; }
 .cmp .ab { font-size: 13px; font-weight: 700; color: var(--muted); }
 .track { height: 6px; border-radius: 999px; background: var(--soft); overflow: hidden; }
 .track div { height: 100%; border-radius: 999px; }
-.cmp .val { font-family: var(--display); font-size: 22px; font-weight: 600; color: var(--muted);
+.cmp .val { font-family: var(--display); font-size: 19px; font-weight: 600; color: var(--muted);
             font-variant-numeric: tabular-nums; min-width: 48px; text-align: right; }
 .cmp .val.best { color: var(--fg); font-weight: 700; }
 .tag-b2b { display: inline-block; font-family: var(--body); font-size: 11px; font-weight: 700; color: #92400E;
@@ -242,7 +247,7 @@ table.std tr:hover .club img { transform: scale(1.15); }
 .g-line { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 10px; padding: 3px 0; color: var(--subtle); }
 .g-line img { height: 26px; width: 26px; object-fit: contain; }
 .g-line .n { font-weight: 600; }
-.g-line .s { font-family: var(--display); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.g-line .s { font-family: var(--display); font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .g-line.win { color: var(--fg); }
 .g-line.win .s { font-weight: 700; }
 
@@ -654,8 +659,9 @@ with main:
     </div>
     """)
 
-    with st.expander("Détail : les 10 valeurs envoyées au modèle"):
-        st.dataframe(X.T.rename(columns={0: "valeur"}).round(3), use_container_width=True)
+    if DEBUG:
+        with st.expander("Détail : les 10 valeurs envoyées au modèle"):
+            st.dataframe(X.T.rename(columns={0: "valeur"}).round(3), use_container_width=True)
 
 html("""
 <div class="footer">
