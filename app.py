@@ -185,7 +185,7 @@ header[data-testid="stHeader"] { display: none; }
 .model dt { color: var(--muted); } .model dd { margin: 0; color: var(--fg); font-weight: 600; text-align: right; }
 
 /* Hero */
-.dash { display: grid; gap: 18px; }
+.dash { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
 .hero { position: relative; overflow: hidden; padding: 22px 28px 24px;
         background:
           radial-gradient(520px 260px at 0% 60%, color-mix(in srgb, var(--home) 13%, transparent), transparent 70%),
@@ -260,7 +260,7 @@ header[data-testid="stHeader"] { display: none; }
 
 /* Grille basse */
 .split { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); gap: 18px; align-items: start; }
-.stack { display: grid; gap: 18px; }
+.stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; min-width: 0; }
 
 /* Classement */
 .tbl-wrap { overflow-x: auto; padding: 0 8px 8px; }
@@ -421,7 +421,7 @@ table.std tr:hover .club img { transform: scale(1.15); }
 .day-head h2 span { color: var(--primary); }
 .day-head .sub { font-size: 13px; color: var(--subtle); display: inline-flex; align-items: center; gap: 6px; }
 
-.ggrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 14px; }
+.ggrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(255px, 100%), 1fr)); gap: 14px; }
 a.gcard, a.gcard:hover, a.gcard:visited { text-decoration: none !important; color: inherit !important; }
 .gcard { display: block; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
          padding: 12px 14px 12px; box-shadow: var(--shadow); cursor: pointer;
@@ -458,7 +458,7 @@ a.gcard, a.gcard:hover, a.gcard:visited { text-decoration: none !important; colo
 .hint { display: flex; align-items: center; gap: 14px; padding: 16px 20px; margin-top: 18px; color: var(--muted); font-size: 14px; }
 .hint .dot { width: 36px; height: 36px; flex-shrink: 0; }
 .hint .dot svg { width: 100%; height: 100%; }
-.detail-head { display: flex; justify-content: space-between; align-items: center; margin: 30px 0 12px; }
+.detail-head { display: flex; justify-content: space-between; align-items: center; gap: 8px 16px; flex-wrap: wrap; margin: 30px 0 12px; }
 .detail-head h2 { font-family: var(--display); font-weight: 400 !important; font-size: 20px; text-transform: uppercase;
                   letter-spacing: .5px; color: var(--fg); margin: 0; padding: 0; }
 a.back, a.back:visited { font-size: 13px; color: var(--primary) !important; text-decoration: none !important; font-weight: 600; }
@@ -479,6 +479,51 @@ a.back:hover { text-decoration: underline !important; }
   .prob { font-size: 56px; }
   .nav-meta { display: none; }
 }
+
+/* ===================== TÉLÉPHONE ET PETITES TABLETTES ===================== */
+@media (max-width: 1150px) {
+  .split { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 680px) {
+  .block-container { padding: 0 14px 28px; }
+  .nav { padding: 12px 14px; }
+  .brand img { height: 32px; }
+  .brand .wm { font-size: 20px; }
+  .brand .tl { font-size: 11px; }
+  /* Barre de date : la date sur toute la largeur, puis les 3 boutons sur une ligne */
+  .st-key-datebar { padding: 10px !important; }
+  .st-key-datebar [data-testid="stHorizontalBlock"] { flex-direction: row !important; flex-wrap: wrap !important; gap: 8px !important; }
+  .st-key-datebar [data-testid="stColumn"] { min-width: 0 !important; flex: 1 1 0 !important; width: auto !important; }
+  .st-key-datebar [data-testid="stColumn"]:nth-child(2) { order: -1; flex: 1 1 100% !important; }
+  .day-head h2 { font-size: 19px; }
+  .detail-head h2 { font-size: 16px; line-height: 1.3; }
+  /* Carte du match */
+  .hero { padding: 16px 16px 18px; }
+  .hero-meta { flex-direction: column; gap: 4px; font-size: 13px; }
+  .tname { font-size: 19px; }
+  .prob { font-size: 46px; }
+  .prob small { font-size: 20px; }
+  .vs { display: none; }
+  .hero-foot { flex-direction: column; align-items: flex-start; }
+  .result { flex-wrap: wrap; gap: 6px 10px; }
+  /* Classement : on retire la colonne « Win % » pour que le tableau tienne sans défiler */
+  table.std th, table.std td { padding: 8px 6px; }
+  table.std th:nth-child(4), table.std td:nth-child(4) { display: none; }
+  table.std .club { gap: 8px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+  .card-head { flex-wrap: wrap; gap: 4px 12px; padding: 14px 14px 8px; }
+  .games, .hot { padding-left: 14px; padding-right: 14px; }
+  .hot-row { grid-template-columns: 16px 26px 1fr 48px 38px; gap: 8px; }
+  /* Intro */
+  .intro-title { font-size: 34px; }
+  .board { transform: scale(.8); transform-origin: bottom center; }
+}
+@media (max-width: 380px) {
+  .tname { font-size: 17px; }
+  .logo-wrap, .logo-wrap img { height: 56px; width: 56px; }
+  .side { gap: 14px; }
+  table.std th:nth-child(5), table.std td:nth-child(5) { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .intro { display: none !important; }
@@ -799,9 +844,9 @@ html(f"""
 # ----------------------------------------------------------------------------
 with st.container(key="datebar"):
     c_prev, c_date, c_next, c_today = st.columns([1, 2.2, 1, 1], vertical_alignment="bottom")
-    c_prev.button("Previous day", icon=":material/chevron_left:", on_click=_shift, args=(-1,), use_container_width=True)
+    c_prev.button("Prev", icon=":material/chevron_left:", on_click=_shift, args=(-1,), use_container_width=True)
     c_date.date_input("Game date (US date)", key="day", format="MM/DD/YYYY", on_change=_clear_match)
-    c_next.button("Next day", icon=":material/chevron_right:",
+    c_next.button("Next", icon=":material/chevron_right:",
                   on_click=_shift, args=(1,), use_container_width=True)
     c_today.button("Today", on_click=lambda: (st.session_state.update(day=US_TODAY), _clear_match()),
                    use_container_width=True)
