@@ -368,10 +368,34 @@ table.std tr:hover .club img { transform: scale(1.15); }
 
 /* ===================== CALENDRIER DES MATCHS ===================== */
 .st-key-datebar { background: var(--card); border: 1px solid var(--border) !important; border-radius: var(--radius);
-                  box-shadow: var(--shadow); padding: 10px 14px !important; margin-top: 4px;
+                  box-shadow: var(--shadow); padding: 12px 16px 16px !important; margin-top: 4px;
                   animation: rise var(--t-in) var(--ease) var(--o, 0s) both; }
-.st-key-datebar [data-baseweb="input"] { border-radius: 8px !important; }
-.st-key-datebar button { border-radius: 8px !important; }
+/* Titre « Game date » en graffiti, comme les autres titres */
+.st-key-datebar label p { font-family: var(--display) !important; font-size: 22px !important; font-weight: 400 !important;
+                          color: var(--fg) !important; letter-spacing: .5px; text-transform: uppercase; }
+/* Boutons façon autocollant de rue : contour épais, ombre décalée, et ils s'enfoncent quand on clique */
+.st-key-datebar button {
+  min-height: 46px; border: 2.5px solid #0B1220 !important; border-radius: 10px !important; background: #fff !important;
+  box-shadow: 4px 4px 0 #0B1220 !important; color: #0B1220 !important;
+  transition: transform .12s ease, box-shadow .12s ease, background-color .2s ease !important; }
+.st-key-datebar button [data-testid="stMarkdownContainer"] p {
+  font-family: var(--num) !important; font-size: 15px !important; letter-spacing: 1px; text-transform: uppercase;
+  font-weight: 400 !important; }
+.st-key-datebar button:hover { background: #FFF7ED !important; transform: translate(-1px, -1px);
+                               box-shadow: 5px 5px 0 #0B1220 !important; }
+.st-key-datebar button:active { transform: translate(4px, 4px); box-shadow: 0 0 0 #0B1220 !important; }
+.st-key-datebar button:focus-visible { outline: 3px solid #60A5FA !important; outline-offset: 3px; }
+/* « Today » en orange ballon pour le distinguer */
+.st-key-datebar [data-testid="stColumn"]:nth-child(4) button { background: #C2410C !important; color: #fff !important; }
+.st-key-datebar [data-testid="stColumn"]:nth-child(4) button:hover { background: #9A3412 !important; }
+/* Champ de date : même contour, chiffres en Bungee */
+.st-key-datebar [data-testid="stDateInputField"] button { border: none !important; box-shadow: none !important;
+  background: transparent !important; min-height: 0; transform: none !important; color: #0B1220 !important; }
+.st-key-datebar [data-testid="stDateInputField"] { min-height: 46px; border: 2.5px solid #0B1220 !important;
+  border-radius: 10px !important; background: #fff !important; box-shadow: 4px 4px 0 #0B1220 !important; }
+.st-key-datebar [data-testid="stDateInputField"] *:not([data-testid="stIconMaterial"]) {
+  font-family: var(--num) !important; font-size: 16px !important; letter-spacing: 1px; color: #0B1220;
+  background-color: transparent; border-color: transparent; box-shadow: none; }
 .day-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 22px 0 12px; }
 .day-head h2 { font-family: var(--display); font-weight: 400 !important; font-size: 32px; text-transform: uppercase;
                letter-spacing: .5px; color: var(--fg); margin: 0; padding: 0; }
@@ -449,6 +473,8 @@ a.back:hover { text-decoration: underline !important; }
   .brand .tl { font-size: 11px; }
   /* Barre de date : la date sur toute la largeur, puis les 3 boutons sur une ligne */
   .st-key-datebar { padding: 10px !important; }
+  .st-key-datebar button [data-testid="stMarkdownContainer"] p { font-size: 13px !important; }
+  .st-key-datebar button, .st-key-datebar [data-testid="stDateInputField"] { box-shadow: 3px 3px 0 #0B1220 !important; }
   .st-key-datebar [data-testid="stHorizontalBlock"] { flex-direction: row !important; flex-wrap: wrap !important; gap: 8px !important; }
   .st-key-datebar [data-testid="stColumn"] { min-width: 0 !important; flex: 1 1 0 !important; width: auto !important; }
   .st-key-datebar [data-testid="stColumn"]:nth-child(2) { order: -1; flex: 1 1 100% !important; }
