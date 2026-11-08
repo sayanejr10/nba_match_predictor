@@ -53,6 +53,20 @@ def icon(name: str, size: int = 15) -> str:
             f'aria-hidden="true">{ICONS[name]}</svg>')
 
 
+BALL_SVG = ('<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="#EA7A2B" stroke="#3A1D0B" stroke-width="1.4"/>'
+            '<path d="M16 1v30M1 16h30M5.5 5.5c5 4 5 17 0 21M26.5 5.5c-5 4-5 17 0 21" fill="none" stroke="#3A1D0B" stroke-width="1.4"/></svg>')
+
+
+def flaps(value: int, delay: float = .6) -> str:
+    """Chiffres façon panneau d'arène : chaque chiffre est une plaque qui bascule jusqu'à sa valeur."""
+    tiles = []
+    for k, ch in enumerate(str(int(value))):
+        d = int(ch)
+        tiles.append(f'<span class="flap" style="--to:{d};--st:{max(d, 1)};--fd:{delay + k * .15:.2f}s">'
+                     f'<span class="digit"></span><i class="leaf"></i></span>')
+    return f'<span class="flaps">{"".join(tiles)}</span>'
+
+
 def count(value: int) -> str:
     """Nombre qui défile de 0 jusqu'à sa valeur (affiché tel quel si l'animation est désactivée)."""
     return f'<span class="count" style="--to:{int(value)}"></span>'
@@ -187,8 +201,29 @@ header[data-testid="stHeader"] { display: none; }
 .vs { text-align: center; }
 .vs .v { font-family: var(--display); font-size: 22px; font-weight: 700; color: var(--subtle); letter-spacing: 2px; }
 .vs .l { font-size: 11px; color: var(--subtle); text-transform: uppercase; letter-spacing: 1.2px; margin-top: 4px; }
-.pbar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; gap: 3px; margin-top: 22px; background: var(--soft); }
-.pbar div { height: 100%; }
+/* Rail de probabilité + ballon */
+.roll { position: relative; height: 32px; margin-top: 20px; --t-roll: 1.6s; }
+.roll .rail { position: absolute; left: 0; right: 0; top: 11px; height: 10px; border-radius: 999px; overflow: hidden;
+              background: var(--away); }
+.roll .rail .fill { position: absolute; inset: 0 auto 0 0; width: var(--p); background: var(--home); }
+.roll .pos { position: absolute; left: 0; top: 0; width: var(--p); height: 32px; }
+.roll .ball-y { position: absolute; right: -16px; top: 0; width: 32px; height: 32px; }
+.roll .ball { width: 32px; height: 32px; filter: drop-shadow(0 3px 4px rgba(15,23,42,.3)); }
+.roll .ball svg { width: 100%; height: 100%; display: block; }
+
+/* Chiffres d'arène */
+.flaps { display: inline-flex; gap: .06em; vertical-align: top; }
+.flap { position: relative; width: .7em; height: 1.08em; border-radius: .09em; background: #0F172A; color: #fff;
+        display: grid; place-items: center; line-height: 1; perspective: 300px; overflow: hidden;
+        box-shadow: inset 0 -.04em 0 rgba(255,255,255,.08), 0 .06em .16em rgba(15,23,42,.22); }
+.flap::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: .03em; background: rgba(0,0,0,.5); z-index: 2; }
+.digit { counter-reset: n var(--n); --n: var(--to); position: relative; top: .02em; }
+.digit::after { content: counter(n); }
+.leaf { position: absolute; left: 0; right: 0; top: 0; height: 50%; opacity: 0; z-index: 1; transform-origin: bottom;
+        backface-visibility: hidden; background: linear-gradient(180deg, #1E293B, #0F172A); }
+.prob.dog .flap { background: #CBD5E1; color: #334155; }
+.prob.dog .leaf { background: linear-gradient(180deg, #E2E8F0, #CBD5E1); }
+.prob small { vertical-align: top; }
 .hero-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; flex-wrap: wrap; gap: 10px; }
 .verdict { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px;
            font-size: 14px; font-weight: 600; }
@@ -264,12 +299,12 @@ table.std tr:hover .club img { transform: scale(1.15); }
 .footer { text-align: center; color: var(--subtle); font-size: 12px; margin-top: 26px; }
 
 /* ===================== ANIMATIONS ===================== */
+/* --o : décalage global. Il vaut la durée de l'intro quand elle est jouée, sinon 0. */
 @property --n { syntax: '<integer>'; inherits: false; initial-value: 0; }
-.count { counter-reset: n var(--n); --n: var(--to); animation: count var(--t-fill) var(--ease) var(--cd, .5s) both; }
+.count { counter-reset: n var(--n); --n: var(--to); animation: count var(--t-fill) var(--ease) calc(var(--o, 0s) + var(--cd, .5s)) both; }
 .count::after { content: counter(n); }
 @keyframes count { from { --n: 0; } }
 
-/* Entrées */
 @keyframes rise     { from { opacity: 0; transform: translateY(16px); } }
 @keyframes in-left  { from { opacity: 0; transform: translateX(-40px); } }
 @keyframes in-right { from { opacity: 0; transform: translateX(40px); } }
@@ -278,29 +313,90 @@ table.std tr:hover .club img { transform: scale(1.15); }
 @keyframes grow     { from { transform: scaleX(0); } }
 @keyframes grow-y   { from { transform: scaleY(0); } }
 
-.card, .st-key-pick { animation: rise var(--t-in) var(--ease) var(--d, 0s) both; }
-.side.home { animation: in-left .8s var(--ease) .25s both; }
-.side.away { animation: in-right .8s var(--ease) .25s both; }
-.logo-wrap img { animation: pop .7s var(--spring) .35s both; }
-.vs { animation: fade .6s ease .5s both; }
-.hero-meta { animation: fade .6s ease .3s both; }
+.card, .st-key-pick { animation: rise var(--t-in) var(--ease) calc(var(--o, 0s) + var(--d, 0s)) both; }
+.side.home { animation: in-left .8s var(--ease) calc(var(--o, 0s) + .25s) both; }
+.side.away { animation: in-right .8s var(--ease) calc(var(--o, 0s) + .25s) both; }
+.logo-wrap img { animation: pop .7s var(--spring) calc(var(--o, 0s) + .35s) both; }
+.vs { animation: fade .6s ease calc(var(--o, 0s) + .5s) both; }
+.hero-meta { animation: fade .6s ease calc(var(--o, 0s) + .3s) both; }
+.verdict, .note { animation: pop .5s var(--spring) calc(var(--o, 0s) + 2.2s) both; }
 
-/* Barre de probabilité : chaque équipe pousse depuis son côté */
-.pbar .h { transform-origin: left;  animation: grow var(--t-fill) var(--ease) .5s both; }
-.pbar .a { transform-origin: right; animation: grow var(--t-fill) var(--ease) .5s both; }
-.verdict, .note { animation: pop .5s var(--spring) 1.5s both; }
+/* 3. Chiffres d'arène : chaque plaque bascule autant de fois que la valeur du chiffre */
+.digit { animation: count 1.3s steps(var(--st)) calc(var(--o, 0s) + var(--fd)) both; }
+.leaf { animation: flip calc(1.3s / var(--st)) cubic-bezier(.55, 0, .75, .5) calc(var(--o, 0s) + var(--fd)) var(--st) both; }
+@keyframes flip { from { opacity: 1; transform: rotateX(0deg); } to { opacity: 1; transform: rotateX(-180deg); } }
+
+/* 2. Le ballon roule jusqu'à la probabilité, peint la couleur de l'équipe, puis rebondit */
+.roll .rail .fill { transform-origin: left; animation: grow var(--t-roll) var(--ease) calc(var(--o, 0s) + .5s) both; }
+.roll .pos { animation: roll-x var(--t-roll) var(--ease) calc(var(--o, 0s) + .5s) both; }
+@keyframes roll-x { from { transform: translateX(-100%); } }
+.roll .ball { animation: spin var(--t-roll) var(--ease) calc(var(--o, 0s) + .5s) both; }
+@keyframes spin { from { transform: rotate(-2.5turn); } }
+.roll .ball-y { animation: bounce .6s ease-out calc(var(--o, 0s) + .5s + var(--t-roll) - .1s) both; }
+@keyframes bounce { 0%, 100% { transform: translateY(0); } 30% { transform: translateY(-12px); }
+                    55% { transform: translateY(0); } 75% { transform: translateY(-4px); } }
 
 /* Le favori émet une onde douce */
-.side.fav .halo { animation: halo 2.6s ease-out 2s infinite; }
+.side.fav .halo { animation: halo 2.6s ease-out calc(var(--o, 0s) + 2.4s) infinite; }
 @keyframes halo { 0% { opacity: .55; transform: scale(.9); } 100% { opacity: 0; transform: scale(1.35); } }
 
 /* Barres et listes en cascade */
-.track div { transform-origin: left; animation: grow 1s var(--ease) calc(.7s + var(--i, 0) * 80ms) both; }
-.cmp .val { animation: fade .5s ease calc(.8s + var(--i, 0) * 80ms) both; }
-.cascade { animation: rise .45s var(--ease) calc(var(--d0, .6s) + var(--i) * 40ms) both; }
-.form i { transform-origin: bottom; animation: grow-y .3s var(--ease) calc(1s + var(--i) * 50ms) both; }
-.model .gauge .fill { transform-origin: left; animation: grow var(--t-fill) var(--ease) .3s both; }
-.model .gauge .mark { animation: fade .4s ease 1.2s both; }
+.track div { transform-origin: left; animation: grow 1s var(--ease) calc(var(--o, 0s) + .7s + var(--i, 0) * 80ms) both; }
+.cmp .val { animation: fade .5s ease calc(var(--o, 0s) + .8s + var(--i, 0) * 80ms) both; }
+.cascade { animation: rise .45s var(--ease) calc(var(--o, 0s) + var(--d0, .6s) + var(--i) * 40ms) both; }
+.form i { transform-origin: bottom; animation: grow-y .3s var(--ease) calc(var(--o, 0s) + 1s + var(--i) * 50ms) both; }
+.model .gauge .fill { transform-origin: left; animation: grow var(--t-fill) var(--ease) calc(var(--o, 0s) + .3s) both; }
+.model .gauge .mark { animation: fade .4s ease calc(var(--o, 0s) + 1.2s) both; }
+
+/* 1. Intro « swish » : un tir, le filet, puis le tableau de bord */
+.skip-cb { position: fixed; opacity: 0; pointer-events: none; }
+.intro { position: fixed; inset: 0; z-index: 100000; cursor: pointer; overflow: hidden; display: block;
+         background: radial-gradient(70% 60% at 50% 35%, #1B2A4A 0%, #0B1220 60%, #060A12 100%);
+         animation: intro-out .55s ease-in 2.35s forwards; }
+.skip-cb:checked + .intro { display: none; }
+:root:has(.skip-cb:checked) { --o: 0s !important; }
+@keyframes intro-out { to { opacity: 0; visibility: hidden; } }
+.intro .floor { position: absolute; left: -10%; right: -10%; bottom: -30%; height: 60%; border-radius: 50%;
+                border: 2px solid rgba(96,165,250,.18); }
+.stage { position: absolute; left: 50%; top: 40%; width: 0; height: 0; }
+.board { position: absolute; left: -95px; top: -118px; width: 190px; height: 120px; border: 4px solid #E2E8F0;
+         border-radius: 6px; background: rgba(255,255,255,.06); z-index: 1; }
+.board::after { content: ""; position: absolute; left: 62px; bottom: 6px; width: 58px; height: 42px; border: 3px solid #E2E8F0; }
+.rim { position: absolute; left: -40px; top: -6px; width: 80px; height: 12px; border: 4px solid #F97316; border-radius: 50%; }
+.rim.back { z-index: 1; clip-path: inset(0 0 50% 0); }
+.rim.front { z-index: 3; clip-path: inset(50% 0 0 0); }
+.net { position: absolute; left: -36px; top: 2px; width: 72px; height: 62px; z-index: 3; transform-origin: top; }
+.net svg { width: 100%; height: 100%; display: block; }
+.shot { position: absolute; left: 0; top: 0; z-index: 2; }
+.shot-y, .shot-drop, .shot-ball { position: absolute; left: 0; top: 0; }
+.shot-ball { width: 46px; height: 46px; margin: -30px 0 0 -23px; }
+.shot-ball svg { width: 100%; height: 100%; display: block; }
+.intro-title { position: absolute; left: 0; right: 0; top: calc(40% + 110px); text-align: center;
+               font-family: var(--display); font-size: 46px; color: #fff; letter-spacing: 2px; text-transform: uppercase; }
+.intro-title span { color: #60A5FA; }
+.intro-sub { position: absolute; left: 0; right: 0; top: calc(40% + 170px); text-align: center; color: #94A3B8;
+             font-size: 15px; letter-spacing: 3px; text-transform: uppercase; }
+.intro-skip { position: absolute; right: 24px; bottom: 20px; color: #64748B; font-size: 13px; }
+
+/* Trajectoire : X linéaire, Y en parabole (monte en ralentissant, retombe en accélérant) */
+.shot { animation: shot-x 1.05s linear .25s both; }
+@keyframes shot-x { from { transform: translateX(-42vw); } to { transform: translateX(0); } }
+.shot-y { animation: shot-y 1.05s .25s both; }
+@keyframes shot-y {
+  0%   { transform: translateY(55vh); animation-timing-function: cubic-bezier(.2, .7, .4, 1); }
+  58%  { transform: translateY(-24vh); animation-timing-function: cubic-bezier(.6, 0, .8, .4); }
+  100% { transform: translateY(0); } }
+.shot-drop { animation: shot-drop .45s cubic-bezier(.5, 0, 1, 1) 1.3s forwards; }
+@keyframes shot-drop { to { transform: translateY(95px) scale(.88); opacity: 0; } }
+.shot-ball { animation: shot-spin 1.5s linear .25s both; }
+@keyframes shot-spin { from { transform: rotate(-540deg); } }
+.net { animation: swish .55s ease-out 1.3s both; }
+@keyframes swish { 0% { transform: scaleY(1) scaleX(1); } 35% { transform: scaleY(1.32) scaleX(.86); }
+                   65% { transform: scaleY(.92) scaleX(1.04); } 100% { transform: none; } }
+.intro-title { animation: title-in .6s var(--spring) 1.5s both; }
+@keyframes title-in { from { opacity: 0; transform: scale(.7) translateY(10px); } }
+.intro-sub { animation: fade .5s ease 1.75s both; }
+.intro-skip { animation: fade .4s ease .4s both; }
 
 @media (max-width: 1150px) {
   .kpis { grid-template-columns: repeat(2, 1fr); }
@@ -316,6 +412,8 @@ table.std tr:hover .club img { transform: scale(1.15); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+  .intro { display: none !important; }
+  .leaf { display: none; }
 }
 </style>
 """)
@@ -433,6 +531,29 @@ def color(abbr):
 # ----------------------------------------------------------------------------
 # Barre de navigation + bandeau des scores
 # ----------------------------------------------------------------------------
+# Intro « swish » : jouée une seule fois par visite (pas à chaque changement d'équipe)
+if not st.session_state.get("intro_done"):
+    st.session_state["intro_done"] = True
+    net_lines = "".join(f'<path d="M{4 + k * 8} 2 L{10 + k * 6.5} 58"/><path d="M{68 - k * 8} 2 L{62 - k * 6.5} 58"/>' for k in range(5))
+    html(f"""
+    <style>:root {{ --o: 2.3s; }}</style>
+    <input type="checkbox" id="skip-intro" class="skip-cb" aria-hidden="true" tabindex="-1">
+    <label for="skip-intro" class="intro" aria-hidden="true">
+      <div class="floor"></div>
+      <div class="stage">
+        <div class="board"></div>
+        <div class="rim back"></div>
+        <div class="shot"><div class="shot-y"><div class="shot-drop"><div class="shot-ball">{BALL_SVG}</div></div></div></div>
+        <div class="rim front"></div>
+        <div class="net"><svg viewBox="0 0 72 62" fill="none" stroke="#E2E8F0" stroke-width="1.6" stroke-linecap="round">
+          {net_lines}<path d="M6 16 H66 M9 30 H63 M11 44 H61"/></svg></div>
+      </div>
+      <div class="intro-title">Court<span>Side</span></div>
+      <div class="intro-sub">Pronostics NBA</div>
+      <div class="intro-skip">Cliquer pour passer</div>
+    </label>
+    """)
+
 scores = latest_scores(games)
 html(f"""
 <nav class="nav">
@@ -573,18 +694,18 @@ with main:
         <div class="side home {home_fav}">
           <div class="logo-wrap" style="--c:{color(home)}"><span class="halo"></span><img src="{logo(home)}" alt="{full_name[home]}"></div>
           <div><div class="tname">{full_name[home]}</div><div class="trec num">{h['RECORD']} · Domicile</div>
-               <div class="prob {home_cls}">{count(round(p_home * 100))}<small>%</small></div></div>
+               <div class="prob {home_cls}">{flaps(round(p_home * 100), .55)}<small>%</small></div></div>
         </div>
         <div class="vs"><div class="v">VS</div><div class="l">{fr_date(game_date, year=False)}</div></div>
         <div class="side away {away_fav}">
           <div class="logo-wrap" style="--c:{color(away)}"><span class="halo"></span><img src="{logo(away)}" alt="{full_name[away]}"></div>
           <div><div class="tname">{full_name[away]}</div><div class="trec num">{a['RECORD']} · Extérieur</div>
-               <div class="prob {away_cls}">{count(round(p_away * 100))}<small>%</small></div></div>
+               <div class="prob {away_cls}">{flaps(round(p_away * 100), .7)}<small>%</small></div></div>
         </div>
       </div>
-      <div class="pbar" aria-hidden="true">
-        <div class="h" style="width:{p_home:.1%};background:{color(home)}"></div>
-        <div class="a" style="width:{p_away:.1%};background:{color(away)}"></div>
+      <div class="roll" aria-hidden="true" style="--p:{p_home:.1%}">
+        <div class="rail"><div class="fill"></div></div>
+        <div class="pos"><div class="ball-y"><div class="ball">{BALL_SVG}</div></div></div>
       </div>
       <div class="hero-foot">{verdict}{note}</div>
     </section>
