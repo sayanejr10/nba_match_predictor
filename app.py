@@ -5,9 +5,10 @@ from html import escape
 import joblib
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 from nba_api.stats.endpoints import leaguegamefinder, scheduleleaguev2
 
-from intro import intro_html
+from intro3d import PARENT_CSS as INTRO3D_CSS, intro3d_page
 
 # ----------------------------------------------------------------------------
 # Configuration
@@ -142,10 +143,17 @@ header[data-testid="stHeader"] { display: none; }
              color: #fff; text-transform: uppercase; line-height: 1; }
 .brand .wm span { color: #60A5FA; }
 .brand .tl { font-size: 12px; color: #94A3B8; margin-top: 3px; }
-.nav-meta { display: flex; gap: 10px; }
-.nav-pill { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px;
-            border: 1px solid #1E293B; color: #CBD5E1; font-size: 13px; font-weight: 500; }
-.nav-pill b { color: #fff; font-weight: 600; }
+.nav-meta { display: flex; gap: 16px; align-items: center; }
+.nav-pill { display: inline-flex; align-items: center; gap: 8px; padding: 5px 6px 5px 11px;
+            background: #fff; color: var(--ink); border: 2.5px solid var(--ink); border-radius: 10px;
+            box-shadow: 4px 4px 0 #60A5FA; transform: rotate(-1.5deg);
+            font-family: var(--num); font-size: 11.5px; letter-spacing: .8px; text-transform: uppercase;
+            transition: transform .18s ease, box-shadow .18s ease; }
+.nav-pill:hover { transform: rotate(0deg) translate(-1px,-1px); box-shadow: 6px 6px 0 #60A5FA; }
+.nav-pill svg { color: var(--ink); flex-shrink: 0; }
+.nav-pill b { font-family: var(--num); font-weight: 400; font-size: 13px; color: var(--ink);
+              background: #FACC15; border: 2px solid var(--ink); border-radius: 6px; padding: 3px 7px 1px; }
+@media (prefers-reduced-motion: reduce) { .nav-pill { transition: none; } }
 
 /* Bandeau des derniers scores */
 .ticker { margin: 0 calc(50% - 50vw) 26px; background: var(--card); border-bottom: 1px solid var(--border);
@@ -525,6 +533,46 @@ table.std tr.sel td:first-child { box-shadow: inset 5px 0 0 #C2410C; }
 .card-head h3 { color: var(--ink); font-size: 24px !important; }
 .card-head { border-bottom: 2.5px solid var(--ink); margin-bottom: 8px; padding-bottom: 10px; }
 
+
+/* Bandeau des scores : ruban jaune, un autocollant par match, vainqueur en orange */
+.ticker { background: #FACC15 !important; border-top: 3px solid var(--ink) !important; border-bottom: 3px solid var(--ink) !important;
+          box-shadow: 0 4px 0 var(--ink); margin-bottom: 30px !important; }
+.ticker-track { padding: 10px 0 !important; display: inline-flex !important; align-items: center; }
+.ticker-track span { margin: 0 !important; }
+.ticker-track .tag { font-family: var(--display) !important; font-size: 20px !important; letter-spacing: .5px !important;
+                     color: #fff !important; background: var(--ink); padding: 4px 14px 2px; border-radius: 8px;
+                     transform: rotate(-2deg); display: inline-block; margin: 0 16px 0 24px !important; box-shadow: 3px 3px 0 #C2410C; }
+.tk { display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 2px solid var(--ink); border-radius: 10px;
+      padding: 4px 10px; box-shadow: 3px 3px 0 var(--ink); }
+.tk i, .tk b { font-style: normal; font-family: var(--num); font-weight: 400 !important; font-size: 13px; color: #64748B !important; }
+.tk b { font-size: 14px; }
+.tk .win { color: var(--ink) !important; }
+.tk b.win { color: #C2410C !important; }
+.tk em { font-style: normal; color: var(--ink); font-weight: 700; }
+.ticker-track .sep { display: inline-block; width: 16px; height: 16px; margin: 0 14px !important; }
+.sep svg { width: 100%; height: 100%; display: block; }
+
+
+/* Petits textes secondaires en style streetball (lisibles : 11 px minimum, encre foncée) */
+.card-head > span, .day-head > .sub {
+  font-family: var(--num) !important; font-size: 11px !important; letter-spacing: .8px; text-transform: uppercase;
+  color: var(--ink) !important; background: #FACC15; border: 2px solid var(--ink); border-radius: 7px;
+  padding: 4px 9px 3px; box-shadow: 2px 2px 0 var(--ink); transform: rotate(1.5deg); white-space: nowrap; }
+.day-head > .sub { transform: rotate(-1deg); }
+.card-head > span svg, .day-head > .sub svg { width: 12px; height: 12px; }
+/* Ville du match : petit tampon */
+.gtop .city { display: inline-flex; align-items: center; gap: 4px; max-width: 58%; overflow: hidden; white-space: nowrap;
+              font-family: var(--num); font-size: 10.5px; letter-spacing: .6px; text-transform: uppercase; color: var(--ink);
+              border: 1.5px solid var(--ink); border-radius: 6px; padding: 3px 7px 2px; background: #F1F5F9; }
+.gtop .city svg { flex-shrink: 0; }
+/* Nom complet de l'équipe : étiquette de maillot */
+.gline .t small { font-family: var(--body) !important; font-weight: 800 !important; font-size: 11px !important;
+                  text-transform: uppercase; letter-spacing: .7px; color: #334155 !important; margin-top: 1px; }
+/* Carte d'invitation : texte plus présent, mots clés surlignés au marqueur */
+.hint div { font-size: 15px; font-weight: 500; color: var(--ink); line-height: 1.5; }
+.hint mark { background: linear-gradient(transparent 55%, #FACC15 55%, #FACC15 92%, transparent 92%);
+             color: inherit; padding: 0 2px; font-weight: 700; }
+
 /* ===================== TÉLÉPHONE ET PETITES TABLETTES ===================== */
 @media (max-width: 1150px) {
   .split { grid-template-columns: minmax(0, 1fr); }
@@ -561,12 +609,13 @@ table.std tr.sel td:first-child { box-shadow: inset 5px 0 0 #C2410C; }
   .games, .hot { padding-left: 14px; padding-right: 14px; }
   .hot-row { grid-template-columns: 26px 26px 1fr 52px 42px; gap: 8px; }
   .seed { width: 24px; height: 24px; font-size: 11px; }
+  .card-head > span, .day-head > .sub { font-size: 10px !important; white-space: normal; }
+  .hint div { font-size: 14px; }
+  .ticker-track .tag { font-size: 16px !important; margin-left: 14px !important; }
+  .tk i, .tk b { font-size: 12px; }
   table.std td.r { font-size: 12px; }
   table.std .club { font-size: 13px; }
   .card-head h3 { font-size: 20px !important; }
-  /* Intro */
-  .intro-title { font-size: 34px; }
-  .board { transform: scale(.8); transform-origin: bottom center; }
 }
 @media (max-width: 380px) {
   .tname { font-size: 17px; }
@@ -661,10 +710,15 @@ def standings(games, before):
 def latest_scores(games, n=16):
     """Les derniers scores de la ligue pour le bandeau (une entrée par match, côté domicile)."""
     home_rows = games[games["MATCHUP"].str.contains("vs.")].tail(n)
-    return "".join(
-        f"<span>{r.MATCHUP.split()[-1]} <b>{int(r.PTS - r.PLUS_MINUS)}</b> – <b>{int(r.PTS)}</b> {r.TEAM_ABBREVIATION}</span>"
-        for r in home_rows.itertuples()
-    )
+    items = []
+    for r in home_rows.itertuples():
+        away, home = r.MATCHUP.split()[-1], r.TEAM_ABBREVIATION
+        away_pts, home_pts = int(r.PTS - r.PLUS_MINUS), int(r.PTS)
+        aw, hw = ("win", "") if away_pts > home_pts else ("", "win")
+        # Un autocollant par match : l'équipe gagnante est mise en évidence
+        items.append(f'<span class="tk"><i class="{aw}">{away}</i><b class="{aw}">{away_pts}</b><em>–</em>'
+                     f'<b class="{hw}">{home_pts}</b><i class="{hw}">{home}</i></span><span class="sep">{BALL_SVG}</span>')
+    return "".join(items)
 
 
 def fr_day(d):
@@ -846,11 +900,13 @@ def _shift(n):
 
 
 # ----------------------------------------------------------------------------
-# Intro « swish » : une seule fois par visite, jamais en revenant d'un clic sur un match
+# Intro 3D (alley-oop) : une seule fois par visite, jamais en revenant d'un clic sur un match
 # ----------------------------------------------------------------------------
 if not st.session_state.get("intro_done") and qp.get("intro") != "0":
     st.session_state["intro_done"] = True
-    html(intro_html())
+    html(INTRO3D_CSS)
+    with st.container(key="intro3d"):
+        components.html(intro3d_page(), height=600)
 
 # ----------------------------------------------------------------------------
 # Barre de navigation + bandeau des scores
@@ -864,7 +920,6 @@ html(f"""
   </div>
   <div class="nav-meta">
     <span class="nav-pill">{icon("calendar", 14)} Season <b>{CURRENT_SEASON}</b></span>
-    <span class="nav-pill">{icon("target", 14)} Accuracy <b>67%</b></span>
   </div>
 </nav>
 <div class="ticker" aria-hidden="true"><div class="ticker-track">
@@ -933,7 +988,7 @@ def game_tile(k, g):
     sel = "sel" if g.gameId == selected else ""
     return (f'<a class="gcard cascade {sel}" href="{link(day, g.gameId)}" target="_self" style="--d0:.15s;--i:{k}"'
             f' aria-label="{full_name.get(aw, aw)} at {full_name.get(hm, hm)}, see the prediction">'
-            f'<div class="gtop">{top}<span>{escape(g.arenaCity) if isinstance(g.arenaCity, str) else ""}</span></div>'
+            f'<div class="gtop">{top}<span class="city">{icon("pin", 11)}{escape(g.arenaCity) if isinstance(g.arenaCity, str) else ""}</span></div>'
             f'{body}<div class="gfoot">{foot}<span class="see">View</span></div></a>')
 
 
@@ -1031,7 +1086,7 @@ if match.empty:
         <div class="card hint" style="--d:.3s">
           <span class="dot bouncing">{BALL_SVG}</span>
           <div><b>Pick a game</b>
-          Tap any game above to see the full prediction: win probabilities, head-to-head and recent results.</div>
+          Tap any game above to see the full prediction: <mark>win probabilities</mark>, <mark>head-to-head</mark> and <mark>recent results</mark>.</div>
         </div>
         """)
     html(f"""

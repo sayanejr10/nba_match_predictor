@@ -13,3 +13,7 @@ toolbarMode = "viewer"
 
 [browser]
 gatherUsageStats = false
+
+[server]
+# Sert le dossier static/ (les joueurs 3D de l'intro) à l'adresse /app/static/
+enableStaticServing = true
