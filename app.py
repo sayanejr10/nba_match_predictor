@@ -9,6 +9,7 @@ import streamlit.components.v1 as components
 from nba_api.stats.endpoints import leaguegamefinder, scheduleleaguev2
 
 from intro3d import PARENT_CSS as INTRO3D_CSS, intro3d_page
+import espn_data
 
 # ----------------------------------------------------------------------------
 # Configuration
@@ -803,12 +804,23 @@ def load_schedule(season):
 # ----------------------------------------------------------------------------
 # Chargement
 # ----------------------------------------------------------------------------
+@st.cache_data(ttl=1800)  # rafraîchi au maximum toutes les 30 minutes
+def load_data(season):
+    """ESPN d'abord (fonctionne aussi depuis un serveur en ligne), nba_api en secours."""
+    try:
+        games, schedule = espn_data.load_season(season)
+        return games, schedule, "ESPN"
+    except Exception as e:
+        if DEBUG:
+            print("ESPN indisponible, passage sur nba_api :", repr(e))
+        return load_season_games(season), load_schedule(season), "NBA"
+
+
 bundle = load_model()
 model, features = bundle["model"], bundle["features"]
 try:
-    games = load_season_games(CURRENT_SEASON)
-    schedule = load_schedule(CURRENT_SEASON)
-except Exception:  # API lente, indisponible ou réponse inattendue
+    games, schedule, DATA_SOURCE = load_data(CURRENT_SEASON)
+except Exception:  # les deux sources sont indisponibles
     if DEBUG:
         raise  # en mode développeur, on veut voir l'erreur complète
     st.error("Live NBA data is temporarily unavailable. Please try again in a few minutes.")
@@ -1220,6 +1232,7 @@ else:
         X = pd.DataFrame([row])[features]
         with st.expander("Debug: the 10 values sent to the model"):
             st.dataframe(X.T.rename(columns={0: "value"}).round(3), use_container_width=True)
+            st.caption(f"Data source: {DATA_SOURCE}")
 
 html("""
 <div class="footer">
