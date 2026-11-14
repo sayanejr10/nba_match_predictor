@@ -1141,7 +1141,7 @@ def render_grid(title=None):
     html(f"""
     <div class="day-head">
       <h2>{title or 'Games on <span>' + fr_day(day) + '</span>'}</h2>
-      <span class="sub">{icon("clock", 13)} {n} game{"s" if n != 1 else ""} · times shown in Cotonou time</span>
+      <span class="sub">{icon("clock", 13)} {n} game{"s" if n != 1 else ""}</span>
     </div>
     """)
     if n == 0:
