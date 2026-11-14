@@ -1,4 +1,5 @@
-"""« Beat the AI » : les joueurs font leurs pronostics et se mesurent au modèle.
+"""Jeu de pronostics entre amis : chaque joueur choisit les vainqueurs, et le classement
+se fait uniquement dans des ligues privées (on rejoint une ligue avec son code d'invitation).
 
 Stockage : Supabase (base PostgreSQL en ligne), via son API REST.
 - SUPABASE_URL et SUPABASE_SECRET_KEY viennent des variables d'environnement (jamais du code).
@@ -8,6 +9,7 @@ Sécurité :
 - le code à 6 chiffres n'est jamais stocké, seulement une empreinte scrypt (avec un sel unique) ;
 - 5 mauvais codes -> compte bloqué 10 minutes (contre les robots qui essaient tous les codes) ;
 - un pronostic est refusé si le match a commencé (vérifié ici, côté serveur) ;
+- un code de ligue a 31^6 ≈ 887 millions de valeurs possibles : impossible à deviner ;
 - le « se souvenir de moi » utilise un jeton signé (HMAC) : impossible à fabriquer sans la clé du serveur.
 """
 import hashlib
@@ -24,6 +26,10 @@ PSEUDO_RE = re.compile(r"^[A-Za-z0-9_]{3,16}$")
 PIN_RE = re.compile(r"^\d{6}$")
 MAX_FAILS, LOCK_MINUTES = 5, 10
 SESSION_DAYS = 30
+CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"   # sans I, L, O, 0, 1 (trop faciles à confondre)
+CODE_RE = re.compile(rf"^[{CODE_ALPHABET}]{{6}}$")
+LEAGUE_NAME_RE = re.compile(r"^[\w' .\-]{3,30}$")
+MAX_LEAGUES, MAX_MEMBERS = 10, 50
 
 
 class BeatAIError(Exception):
@@ -177,11 +183,18 @@ def save_pick(player_id: str, game_id: str, team: str):
          prefer="resolution=merge-duplicates,return=minimal")
 
 
-def all_picks() -> list:
-    """Tous les pronostics de tous les joueurs (Supabase renvoie 1000 lignes max par requête)."""
+def _in(ids):
+    return "in.(" + ",".join(ids) + ")"
+
+
+def picks_of(player_ids: list) -> list:
+    """Les pronostics des membres d'une ligue (Supabase renvoie 1000 lignes max par requête)."""
+    if not player_ids:
+        return []
     out, start = [], 0
     while True:
-        rows = _req("GET", "picks", params={"select": "player_id,game_id,picked_team", "order": "id"},
+        rows = _req("GET", "picks", params={"select": "player_id,game_id,picked_team",
+                                            "player_id": _in(player_ids), "order": "id"},
                     range_=f"{start}-{start + 999}")
         out += rows
         if len(rows) < 1000:
@@ -189,6 +202,74 @@ def all_picks() -> list:
         start += 1000
 
 
-def players() -> dict:
-    rows = _req("GET", "players", params={"select": "id,pseudo"})
-    return {r["id"]: r["pseudo"] for r in rows}
+# ---------------------------------------------------------------- Ligues privées
+def clean_code(code) -> str:
+    return re.sub(r"[\s\-]", "", str(code or "")).upper()
+
+
+def _new_code() -> str:
+    return "".join(secrets.choice(CODE_ALPHABET) for _ in range(6))
+
+
+def my_leagues(player_id: str) -> list:
+    rows = _req("GET", "league_members", params={"select": "league_id", "player_id": f"eq.{player_id}"})
+    if not rows:
+        return []
+    leagues = _req("GET", "leagues", params={"select": "id,name,code,owner_id",
+                                             "id": _in([r["league_id"] for r in rows])})
+    return sorted(leagues, key=lambda l: l["name"].lower())
+
+
+def create_league(player_id: str, name: str) -> dict:
+    name = re.sub(r"\s+", " ", str(name or "")).strip()
+    if not LEAGUE_NAME_RE.fullmatch(name):
+        raise BeatAIError("League name: 3 to 30 characters (letters, numbers, spaces).")
+    if len(my_leagues(player_id)) >= MAX_LEAGUES:
+        raise BeatAIError(f"You can be in {MAX_LEAGUES} leagues at most.")
+    for _ in range(5):                          # en cas (très rare) de code déjà pris, on en tire un autre
+        try:
+            league = _req("POST", "leagues", json={"name": name, "code": _new_code(), "owner_id": player_id},
+                          prefer="return=representation")[0]
+            break
+        except RuntimeError:
+            continue
+    else:
+        raise RuntimeError("Could not create a unique league code")
+    _req("POST", "league_members", json={"league_id": league["id"], "player_id": player_id},
+         prefer="return=minimal")
+    return league
+
+
+def join_league(player_id: str, code: str) -> dict:
+    code = clean_code(code)
+    if not CODE_RE.fullmatch(code):
+        raise BeatAIError("A league code is 6 letters and numbers, like K7P2QX.")
+    rows = _req("GET", "leagues", params={"select": "id,name,code,owner_id", "code": f"eq.{code}"})
+    if not rows:
+        raise BeatAIError("No league found with this code. Check it with your friend.")
+    league = rows[0]
+    mine = my_leagues(player_id)
+    if any(l["id"] == league["id"] for l in mine):
+        raise BeatAIError(f"You are already in {league['name']}.")
+    if len(mine) >= MAX_LEAGUES:
+        raise BeatAIError(f"You can be in {MAX_LEAGUES} leagues at most.")
+    if len(members(league["id"])) >= MAX_MEMBERS:
+        raise BeatAIError(f"This league is full ({MAX_MEMBERS} players).")
+    _req("POST", "league_members", json={"league_id": league["id"], "player_id": player_id},
+         prefer="return=minimal")
+    return league
+
+
+def members(league_id: str) -> dict:
+    """{id du joueur: pseudo} pour tous les membres d'une ligue."""
+    rows = _req("GET", "league_members", params={"select": "player_id", "league_id": f"eq.{league_id}"})
+    if not rows:
+        return {}
+    ps = _req("GET", "players", params={"select": "id,pseudo", "id": _in([r["player_id"] for r in rows])})
+    return {r["id"]: r["pseudo"] for r in ps}
+
+
+def leave_league(player_id: str, league_id: str):
+    _req("DELETE", "league_members", params={"league_id": f"eq.{league_id}", "player_id": f"eq.{player_id}"})
+    if not members(league_id):                  # dernier membre parti : la ligue disparaît
+        _req("DELETE", "leagues", params={"id": f"eq.{league_id}"})

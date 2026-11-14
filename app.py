@@ -11,6 +11,7 @@ from nba_api.stats.endpoints import leaguegamefinder, scheduleleaguev2
 from intro3d import PARENT_CSS as INTRO3D_CSS, intro3d_page
 import espn_data
 import beat_ai
+from urllib.parse import quote
 
 # ----------------------------------------------------------------------------
 # Configuration
@@ -584,9 +585,9 @@ table.std tr.sel td:first-child { box-shadow: inset 5px 0 0 #C2410C; }
 @keyframes cs-pulse { to { transform: rotate(-2deg) scale(1.06); } }
 @media (prefers-reduced-motion: reduce) { .cs-loading span { animation: none; } }
 
-/* ===================== BEAT THE AI ===================== */
+/* ===================== PICK'EM (ligues privées) ===================== */
 .st-key-cookiejar { display: none !important; }
-.st-key-beatai { margin-top: 18px; background: #fff; border: 2.5px solid var(--ink); border-radius: 18px;
+.st-key-beatai { min-width: 0; max-width: 100%; overflow: hidden; margin-top: 18px; background: #fff; border: 2.5px solid var(--ink); border-radius: 18px;
                  box-shadow: var(--sticker); padding: 20px 22px 18px; gap: 10px; }
 .ba-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
            border-bottom: 2.5px solid var(--ink); padding-bottom: 10px; }
@@ -596,14 +597,19 @@ table.std tr.sel td:first-child { box-shadow: inset 5px 0 0 #C2410C; }
           text-transform: uppercase; color: var(--ink); background: #FACC15; border: 2px solid var(--ink); border-radius: 7px;
           padding: 4px 9px 3px; box-shadow: 2px 2px 0 var(--ink); transform: rotate(1.5deg); }
 .ba-intro { margin: 6px 0 0; font-size: 15px; color: var(--ink); }
-.ba-board { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; text-align: center;
-            background: #0B1220; color: #fff; border-radius: 14px; padding: 14px 10px 10px; }
-.ba-board .ba-side small { display: block; font-family: var(--num); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: #CBD5E1; }
-.ba-board .ba-side b { font-family: var(--num); font-weight: 400; font-size: 46px; line-height: 1.05; }
-.ba-board .ba-vs { font-family: var(--display); font-size: 26px; color: #FACC15; transform: rotate(-6deg); }
-.ba-board .ba-meta { grid-column: 1 / -1; font-size: 13px; color: #CBD5E1; }
-.ba-board.ba-win .ba-side:first-child b { color: #4ADE80; }
-.ba-board.ba-lose .ba-side:nth-child(3) b { color: #F97316; }
+.ba-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 6px; text-align: center;
+            background: #0B1220; color: #fff; border-radius: 14px; padding: 12px 10px 12px; max-width: 100%; }
+.ba-board .ba-who { grid-column: 1 / -1; font-family: var(--display); font-size: 20px; color: #FACC15; letter-spacing: .5px;
+                    overflow-wrap: anywhere; }
+.ba-board .ba-stat b { display: block; font-family: var(--num); font-weight: 400; font-size: 38px; line-height: 1.05; }
+.ba-board .ba-stat small { display: block; font-family: var(--num); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #CBD5E1; }
+.ba-league { margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.ba-lname { font-family: var(--display); font-size: 22px; color: var(--ink); line-height: 1.1; overflow-wrap: anywhere; }
+.ba-lname small { display: block; font-family: var(--body, inherit); font-size: 12px; color: #64748B; }
+.ba-code { background: #FACC15; border: 2px solid var(--ink); border-radius: 9px; box-shadow: 2px 2px 0 var(--ink);
+           padding: 3px 10px 4px; text-align: center; transform: rotate(-1.5deg); }
+.ba-code small { display: block; font-family: var(--num); font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--ink); }
+.ba-code b { font-family: var(--num); font-weight: 400; font-size: 22px; letter-spacing: 3px; color: var(--ink); user-select: all; }
 .ba-sub { margin-top: 8px; font-family: var(--num); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: var(--ink); }
 .ba-game { font-size: 15px; color: var(--ink); }
 .ba-game b { font-family: var(--num); font-weight: 400; }
@@ -612,6 +618,7 @@ table.std tr.sel td:first-child { box-shadow: inset 5px 0 0 #C2410C; }
 .ba-res.ok { color: #15803D; } .ba-res.miss { color: #C2410C; }
 .st-key-beatai button[data-variant="segmented_control"] { font-family: var(--num); letter-spacing: 1px; border: 2px solid var(--ink) !important; }
 .st-key-beatai button[data-variant="segmented_control"][aria-checked="true"] { background: #FACC15 !important; color: var(--ink) !important; }
+.st-key-beatai .ba-lb th, .st-key-beatai .ba-lb td { display: table-cell !important; }
 .ba-lb td.empty { text-align: center; color: #64748B; padding: 14px; }
 
 /* ===================== TÉLÉPHONE ET PETITES TABLETTES ===================== */
@@ -1133,21 +1140,16 @@ def render_grid(title=None):
 
 
 # ----------------------------------------------------------------------------
-# « Beat the AI » : les joueurs font leurs pronostics et se mesurent au modèle
+# Pronostics entre amis : chacun choisit les vainqueurs, classement par ligue privée
 # ----------------------------------------------------------------------------
 BA_COOKIE = "cs_player"
-
-
-@st.cache_data(ttl=1800, show_spinner=False)
-def ai_pick(home, away, day_iso):
-    """Le pronostic du modèle pour un match (le favori), avec les données d'avant ce jour-là."""
-    p, _, _ = predict(home, away, pd.Timestamp(day_iso))
-    return None if p is None else (home if p >= .5 else away)
+APP_URL = "https://courtside-ggkj.onrender.com"
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def _ba_all_picks():
-    return beat_ai.all_picks(), beat_ai.players()
+def _league_data(league_id):
+    names = beat_ai.members(league_id)
+    return names, beat_ai.picks_of(list(names))
 
 
 def _winners():
@@ -1161,25 +1163,23 @@ def _game_info():
 
 
 def _scores(picks, winners, info):
-    """Bilan d'un joueur : bons pronostics, pronostics de l'IA sur les mêmes matchs, série en cours."""
-    right = ai_right = played = 0
+    """Bilan d'un joueur : bons pronostics, matchs terminés, série en cours."""
+    right = played = 0
     timeline = []
     for gid, team in picks.items():
         if gid not in winners:
             continue
-        g = info[gid]
         played += 1
         ok = team == winners[gid]
         right += ok
-        ai = ai_pick(g.homeTeam_teamTricode, g.awayTeam_teamTricode, g.US_DATE.date().isoformat())
-        ai_right += ai == winners[gid]
-        timeline.append((g.START_UTC, ok))
+        timeline.append((info[gid].START_UTC, ok))
     streak = 0
     for _, ok in sorted(timeline, reverse=True):
         if not ok:
             break
         streak += 1
-    return {"right": right, "ai": ai_right, "played": played, "streak": streak}
+    return {"right": right, "played": played, "streak": streak,
+            "pct": round(100 * right / played) if played else None}
 
 
 def _set_cookie(value, max_age):
@@ -1195,7 +1195,7 @@ def _set_cookie(value, max_age):
 def _ba_error(e):
     if DEBUG:
         raise e
-    st.error("Beat the AI is temporarily unavailable. Please try again in a moment.")
+    st.error("Pick'em is temporarily unavailable. Please try again in a moment.")
 
 
 def _on_pick(gid, key):
@@ -1211,16 +1211,116 @@ def _on_pick(gid, key):
     try:
         beat_ai.save_pick(player["id"], gid, team)
         st.session_state["ba_flash"] = ("success", f"Pick saved: {team}")
-        _ba_all_picks.clear()
+        _league_data.clear()
     except Exception as e:
         if DEBUG:
             raise
         st.session_state["ba_flash"] = ("error", "Could not save your pick. Please try again.")
 
 
+def _league_forms(player, first=False):
+    """Rejoindre une ligue avec un code, ou en créer une."""
+    t_join, t_new = st.tabs(["Join with a code", "Start a league"])
+    with t_join:
+        with st.form(f"ba_join_{first}", border=False, clear_on_submit=True):
+            code = st.text_input("League code", max_chars=8, placeholder="K7P2QX",
+                                 value=st.session_state.get("ba_join_code", ""))
+            if st.form_submit_button("Join league", use_container_width=True):
+                if st.session_state.get("ba_join_fails", 0) >= 10:
+                    st.error("Too many wrong codes. Try again later.")
+                else:
+                    try:
+                        lg = beat_ai.join_league(player["id"], code)
+                        _league_data.clear()
+                        st.session_state.pop("ba_join_code", None)
+                        st.session_state["ba_league"] = lg["id"]
+                        st.session_state["ba_flash"] = ("success", f"Welcome to {lg['name']}!")
+                        st.rerun()
+                    except beat_ai.BeatAIError as e:
+                        st.session_state["ba_join_fails"] = st.session_state.get("ba_join_fails", 0) + 1
+                        st.error(str(e))
+                    except Exception as e:
+                        _ba_error(e)
+    with t_new:
+        with st.form(f"ba_create_{first}", border=False, clear_on_submit=True):
+            name = st.text_input("League name", max_chars=30, placeholder="The Block Ballers")
+            if st.form_submit_button("Create league", use_container_width=True):
+                if st.session_state.get("ba_created", 0) >= 3:
+                    st.error("You just created several leagues. Try again later.")
+                else:
+                    try:
+                        lg = beat_ai.create_league(player["id"], name)
+                        _league_data.clear()
+                        st.session_state["ba_created"] = st.session_state.get("ba_created", 0) + 1
+                        st.session_state["ba_league"] = lg["id"]
+                        st.session_state["ba_flash"] = ("success", f"{lg['name']} is ready. Share the code with your friends!")
+                        st.rerun()
+                    except beat_ai.BeatAIError as e:
+                        st.error(str(e))
+                    except Exception as e:
+                        _ba_error(e)
+
+
+def _render_league(player, leagues, winners, info):
+    ids = [l["id"] for l in leagues]
+    if st.session_state.get("ba_league") not in ids:
+        st.session_state["ba_league"] = ids[0]
+    if len(leagues) > 1:
+        st.selectbox("League", ids, key="ba_league", label_visibility="collapsed",
+                     format_func=lambda i: next(l["name"] for l in leagues if l["id"] == i))
+    lg = next(l for l in leagues if l["id"] == st.session_state["ba_league"])
+    try:
+        names, picks = _league_data(lg["id"])
+    except Exception as e:
+        _ba_error(e)
+        return
+    per = {pid: {} for pid in names}
+    for r in picks:
+        per.setdefault(r["player_id"], {})[r["game_id"]] = r["picked_team"]
+    board = []
+    for pid, pk in per.items():
+        s_ = _scores(pk, winners, info)
+        board.append((s_["right"], s_["pct"] or 0, s_["played"], names.get(pid, "?"), pid, s_["pct"]))
+    board.sort(key=lambda x: (-x[0], -x[1], x[3].lower()))
+    rows = "".join(
+        f'<tr class="{"sel" if pid == player["id"] else ""}"><td class="rk"><span class="seed s{min(i + 1, 4)}">{i + 1}</span></td>'
+        f'<td>{escape(name)}</td><td class="r">{right}/{played}</td>'
+        f'<td class="r">{"–" if pct is None else f"{pct}%"}</td></tr>'
+        for i, (right, _, played, name, pid, pct) in enumerate(board))
+    share = f"Join my CourtSide league \"{lg['name']}\" and pick tonight's NBA winners: {APP_URL}/?join={lg['code']}"
+    html(f"""
+    <div class="ba-league">
+      <div class="ba-lname">{escape(lg["name"])}<small>{len(names)} player{"s" if len(names) != 1 else ""}</small></div>
+      <div class="ba-code"><small>Invite code</small><b class="num">{lg["code"]}</b></div>
+    </div>
+    <div class="tbl-wrap"><table class="std ba-lb">
+      <tr><th>#</th><th>Player</th><th class="r">Right</th><th class="r">Hit %</th></tr>
+      {rows}
+    </table></div>
+    """)
+    c1, c2 = st.columns(2)
+    c1.link_button("Invite on WhatsApp", "https://wa.me/?text=" + quote(share), use_container_width=True)
+    with c2.popover("More", use_container_width=True):
+        st.caption("Join another league or start a new one.")
+        _league_forms(player)
+        st.divider()
+        if st.button(f"Leave {lg['name']}", key="ba_leave", type="tertiary"):
+            try:
+                beat_ai.leave_league(player["id"], lg["id"])
+                _league_data.clear()
+                st.session_state.pop("ba_league", None)
+                st.rerun()
+            except Exception as e:
+                _ba_error(e)
+
+
 def render_beat_ai():
     if not beat_ai.enabled():
         return
+    # Lien d'invitation : https://…/?join=K7P2QX pré-remplit le code
+    jc = beat_ai.clean_code(st.query_params.get("join", ""))
+    if beat_ai.CODE_RE.fullmatch(jc):
+        st.session_state["ba_join_code"] = jc
     # Cookie à poser ou à effacer après une connexion / déconnexion
     pending = st.session_state.pop("ba_cookie", None)
     if pending:
@@ -1233,14 +1333,19 @@ def render_beat_ai():
     with st.container(key="beatai"):
         html(f"""
         <div class="ba-head">
-          <h3>Beat the <span>AI</span></h3>
-          <span class="ba-tag">{icon("target", 13)} Pick the winners · 1 pt per right pick</span>
+          <h3>Pick<span>'em</span></h3>
+          <span class="ba-tag">{icon("target", 13)} Private leagues · 1 pt per right pick</span>
         </div>
         """)
         if not player:
-            html('<p class="ba-intro">Think you know ball better than the model? Create a player in 10 seconds, '
-                 'pick tonight\'s winners and see who comes out on top.</p>')
-            t_in, t_new = st.tabs(["Sign in", "New player"])
+            invited = st.session_state.get("ba_join_code")
+            html('<p class="ba-intro">'
+                 + ("You've been invited to a league! Create your player (or sign in) to join it."
+                    if invited else
+                    "Pick tonight's winners and battle your friends in a private league. "
+                    "Create a player in 10 seconds.")
+                 + '</p>')
+            t_new, t_in = st.tabs(["New player", "Sign in"]) if invited else st.tabs(["Sign in", "New player"])[::-1]
             with t_in:
                 with st.form("ba_login", border=False):
                     u = st.text_input("Username", max_chars=16, key="ba_u1")
@@ -1280,19 +1385,18 @@ def render_beat_ai():
         # ---------- Joueur connecté
         try:
             mine = beat_ai.my_picks(player["id"])
+            leagues = beat_ai.my_leagues(player["id"])
         except Exception as e:
             _ba_error(e)
             return
         winners, info = _winners(), _game_info()
         sc = _scores(mine, winners, info)
-        lead = "ba-win" if sc["right"] > sc["ai"] else ("ba-lose" if sc["right"] < sc["ai"] else "")
         html(f"""
-        <div class="ba-board {lead}">
-          <div class="ba-side"><small>{escape(player["pseudo"])}</small><b class="num">{sc["right"]}</b></div>
-          <div class="ba-vs">vs</div>
-          <div class="ba-side"><small>The AI</small><b class="num">{sc["ai"]}</b></div>
-          <div class="ba-meta">{sc["played"]} game{"s" if sc["played"] != 1 else ""} scored ·
-            streak <b>{sc["streak"]}</b>{" 🔥" if sc["streak"] >= 3 else ""}</div>
+        <div class="ba-board">
+          <div class="ba-who">{escape(player["pseudo"])}</div>
+          <div class="ba-stat"><b class="num">{sc["right"]}</b><small>Right picks</small></div>
+          <div class="ba-stat"><b class="num">{"–" if sc["pct"] is None else f'{sc["pct"]}%'}</b><small>Hit rate</small></div>
+          <div class="ba-stat"><b class="num">{sc["streak"]}</b><small>Streak</small></div>
         </div>
         """)
         flash = st.session_state.pop("ba_flash", None)
@@ -1317,40 +1421,22 @@ def render_beat_ai():
                                      disabled=started, on_change=_on_pick, args=(gid, key))
                 if gid in winners and gid in mine:
                     ok = mine[gid] == winners[gid]
-                    ai = ai_pick(hm, aw, g.US_DATE.date().isoformat())
-                    c1.markdown(f'<div class="ba-res {"ok" if ok else "miss"}">{"✓ You got it" if ok else "✗ Missed"}'
-                                f' · AI {"✓" if ai == winners[gid] else "✗"}</div>', unsafe_allow_html=True)
+                    c1.markdown(f'<div class="ba-res {"ok" if ok else "miss"}">{"✓ You got it" if ok else "✗ Missed"}</div>',
+                                unsafe_allow_html=True)
 
-        # ---------- Classement
-        try:
-            picks, names = _ba_all_picks()
-        except Exception as e:
-            _ba_error(e)
-            return
-        per = {}
-        for r in picks:
-            per.setdefault(r["player_id"], {})[r["game_id"]] = r["picked_team"]
-        board = []
-        for pid, pk in per.items():
-            s_ = _scores(pk, winners, info)
-            if s_["played"]:
-                board.append((s_["right"], s_["right"] - s_["ai"], s_["played"], names.get(pid, "?"), pid))
-        board.sort(key=lambda x: (-x[0], -x[1], x[2]))
-        rows = "".join(
-            f'<tr class="{"sel" if pid == player["id"] else ""}"><td class="rk"><span class="seed s{min(i + 1, 4)}">{i + 1}</span></td>'
-            f'<td>{escape(name)}</td><td class="r">{right}/{played}</td>'
-            f'<td class="r {"pos" if diff > 0 else "neg" if diff < 0 else ""}">{diff:+d}</td></tr>'
-            for i, (right, diff, played, name, pid) in enumerate(board[:10]))
-        html(f"""
-        <div class="ba-sub">Leaderboard · season {CURRENT_SEASON}</div>
-        <div class="tbl-wrap"><table class="std ba-lb">
-          <tr><th>#</th><th>Player</th><th class="r">Right picks</th><th class="r">vs AI</th></tr>
-          {rows or '<tr><td colspan="4" class="empty">No finished games with picks yet. Be the first!</td></tr>'}
-        </table></div>
-        """)
-        if st.button("Sign out", key="ba_out"):
+        # ---------- Ligues privées
+        html('<div class="ba-sub">Your leagues</div>')
+        if leagues:
+            _render_league(player, leagues, winners, info)
+        else:
+            html('<p class="ba-intro">You are not in a league yet. Start one and send the code to your friends, '
+                 'or join theirs with the code they sent you.</p>')
+            _league_forms(player, first=True)
+        if st.button("Sign out", key="ba_out", type="tertiary"):
             st.session_state["ba_player"] = None
             st.session_state["ba_cookie"] = ("x", 0)
+            for k in [k for k in st.session_state if str(k).startswith("ba_pick_")] + ["ba_league"]:
+                st.session_state.pop(k, None)
             st.rerun()
 
 
