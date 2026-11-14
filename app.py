@@ -55,7 +55,7 @@ ICONS = {
 }
 
 st.set_page_config(page_title="CourtSide · NBA Match Predictor",
-                   page_icon=":material/sports_basketball:", layout="wide")
+                   page_icon="static/icons/favicon.png", layout="wide")
 
 
 def html(block: str, target=st) -> None:
@@ -586,7 +586,7 @@ table.std tr.sel td:first-child { box-shadow: inset 5px 0 0 #C2410C; }
 @media (prefers-reduced-motion: reduce) { .cs-loading span { animation: none; } }
 
 /* ===================== PICK'EM (ligues privées) ===================== */
-.st-key-cookiejar { display: none !important; }
+.st-key-cookiejar, .st-key-headjar { display: none !important; }
 .st-key-beatai { min-width: 0; max-width: 100%; overflow: hidden; margin-top: 18px; background: #fff; border: 2.5px solid var(--ink); border-radius: 18px;
                  box-shadow: var(--sticker); padding: 20px 22px 18px; gap: 10px; }
 .ba-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
@@ -867,6 +867,23 @@ def load_data(season):
 # Intro 3D (alley-oop) : une seule fois par visite, jamais en revenant d'un clic sur un match.
 # Affichée AVANT le chargement des données : l'intro joue pendant que le modèle et les matchs se chargent.
 # ----------------------------------------------------------------------------
+# Icône et nom de l'app quand on l'ajoute à l'écran d'accueil du téléphone
+with st.container(key="headjar"):
+    components.html("""<script>try {
+      const h = window.parent.document.head;
+      const add = (tag, attrs) => {
+        const sel = tag + Object.entries(attrs).slice(0, 1).map(([k, v]) => `[${k}="${v}"]`).join("");
+        if (!h.querySelector(sel)) { const el = document.createElement(tag); Object.assign(el, attrs);
+          for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v); h.appendChild(el); }
+      };
+      add("link", {rel: "apple-touch-icon", href: "/app/static/icons/apple-touch-icon.png"});
+      add("link", {rel: "manifest", href: "/app/static/icons/manifest.json"});
+      add("meta", {name: "apple-mobile-web-app-title", content: "CourtSide"});
+      add("meta", {name: "apple-mobile-web-app-capable", content: "yes"});
+      add("meta", {name: "mobile-web-app-capable", content: "yes"});
+      add("meta", {name: "theme-color", content: "#0B1220"});
+    } catch (e) {}</script>""", height=0)
+
 if not st.session_state.get("intro_done") and st.query_params.get("intro") != "0":
     st.session_state["intro_done"] = True
     html(INTRO3D_CSS)
@@ -1592,6 +1609,6 @@ else:
 
 html("""
 <div class="footer">
-  © 2026 CourtSide · Predictions for entertainment only
+  © 2026 CourtSide
 </div>
 """)
