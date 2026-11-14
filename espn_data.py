@@ -12,6 +12,8 @@ de l'app n'ait rien à changer :
 - games    : une ligne par équipe et par match terminé (comme LeagueGameFinder)
 - schedule : une ligne par match, joué ou à venir (comme ScheduleLeagueV2)
 """
+from concurrent.futures import ThreadPoolExecutor
+
 import pandas as pd
 import requests
 
@@ -120,8 +122,9 @@ def games_from_schedule(schedule: pd.DataFrame) -> pd.DataFrame:
 
 def load_season(season: str, today=None):
     """(games, schedule) pour la saison demandée. Les mois futurs vides sont simplement ignorés."""
-    events = []
-    for m in season_months(season):
-        events += fetch_month(m)
+    # Les 9 mois sont téléchargés en même temps (et non l'un après l'autre) : chargement bien plus rapide
+    with ThreadPoolExecutor(max_workers=9) as pool:
+        months = list(pool.map(fetch_month, season_months(season)))
+    events = [e for month in months for e in month]
     schedule = parse_events(events)
     return games_from_schedule(schedule), schedule

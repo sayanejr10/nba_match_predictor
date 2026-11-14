@@ -574,6 +574,15 @@ table.std tr.sel td:first-child { box-shadow: inset 5px 0 0 #C2410C; }
 .hint mark { background: linear-gradient(transparent 55%, #FACC15 55%, #FACC15 92%, transparent 92%);
              color: inherit; padding: 0 2px; font-weight: 700; }
 
+/* Sticker d'attente pendant le chargement des données */
+.cs-loading { display: grid; place-items: center; min-height: 60vh; }
+.cs-loading span { font-family: var(--num); font-size: 14px; letter-spacing: 1.5px; text-transform: uppercase;
+                   color: var(--ink); background: #FACC15; border: 2.5px solid var(--ink); border-radius: 10px;
+                   padding: 8px 16px 6px; box-shadow: 4px 4px 0 var(--ink); transform: rotate(-2deg);
+                   animation: cs-pulse 1s ease-in-out infinite alternate; }
+@keyframes cs-pulse { to { transform: rotate(-2deg) scale(1.06); } }
+@media (prefers-reduced-motion: reduce) { .cs-loading span { animation: none; } }
+
 /* ===================== TÉLÉPHONE ET PETITES TABLETTES ===================== */
 @media (max-width: 1150px) {
   .split { grid-template-columns: minmax(0, 1fr); }
@@ -637,12 +646,12 @@ table.std tr.sel td:first-child { box-shadow: inset 5px 0 0 #C2410C; }
 # ----------------------------------------------------------------------------
 # Données et modèle
 # ----------------------------------------------------------------------------
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def load_model():
     return joblib.load("models/model.joblib")
 
 
-@st.cache_data(ttl=3600)  # on re-télécharge au maximum une fois par heure
+@st.cache_data(ttl=3600, show_spinner=False)  # on re-télécharge au maximum une fois par heure
 def load_season_games(season):
     df = leaguegamefinder.LeagueGameFinder(
         season_nullable=season,
@@ -783,7 +792,7 @@ def game_card(k, team, state):
 # ----------------------------------------------------------------------------
 # Calendrier de la saison
 # ----------------------------------------------------------------------------
-@st.cache_data(ttl=3600)  # le calendrier (horaires, scores, statuts) est rafraîchi au maximum une fois par heure
+@st.cache_data(ttl=3600, show_spinner=False)  # le calendrier (horaires, scores, statuts) est rafraîchi au maximum une fois par heure
 def load_schedule(season):
     df = scheduleleaguev2.ScheduleLeagueV2(league_id="00", season=season, timeout=60).get_data_frames()[0]
     df["gameId"] = df["gameId"].astype(str).str.zfill(10)
@@ -804,7 +813,7 @@ def load_schedule(season):
 # ----------------------------------------------------------------------------
 # Chargement
 # ----------------------------------------------------------------------------
-@st.cache_data(ttl=1800)  # rafraîchi au maximum toutes les 30 minutes
+@st.cache_data(ttl=1800, show_spinner=False)  # rafraîchi au maximum toutes les 30 minutes
 def load_data(season):
     """ESPN d'abord (fonctionne aussi depuis un serveur en ligne), nba_api en secours."""
     try:
@@ -816,6 +825,20 @@ def load_data(season):
         return load_season_games(season), load_schedule(season), "NBA"
 
 
+# ----------------------------------------------------------------------------
+# Intro 3D (alley-oop) : une seule fois par visite, jamais en revenant d'un clic sur un match.
+# Affichée AVANT le chargement des données : l'intro joue pendant que le modèle et les matchs se chargent.
+# ----------------------------------------------------------------------------
+if not st.session_state.get("intro_done") and st.query_params.get("intro") != "0":
+    st.session_state["intro_done"] = True
+    html(INTRO3D_CSS)
+    with st.container(key="intro3d"):
+        components.html(intro3d_page(), height=600)
+
+# Petit sticker d'attente (au lieu des messages techniques de Streamlit) pendant le chargement
+_loading = st.empty()
+_loading.markdown('<div class="cs-loading"><span>Loading tonight\'s games…</span></div>', unsafe_allow_html=True)
+
 bundle = load_model()
 model, features = bundle["model"], bundle["features"]
 try:
@@ -825,6 +848,7 @@ except Exception:  # les deux sources sont indisponibles
         raise  # en mode développeur, on veut voir l'erreur complète
     st.error("Live NBA data is temporarily unavailable. Please try again in a few minutes.")
     st.stop()
+_loading.empty()
 
 # Équipes : identifiant (pour les logos) et nom complet, tirés du calendrier
 teams_info = pd.concat([
@@ -910,15 +934,6 @@ def _shift(n):
     st.session_state["day"] = st.session_state["day"] + timedelta(days=n)
     _clear_match()
 
-
-# ----------------------------------------------------------------------------
-# Intro 3D (alley-oop) : une seule fois par visite, jamais en revenant d'un clic sur un match
-# ----------------------------------------------------------------------------
-if not st.session_state.get("intro_done") and qp.get("intro") != "0":
-    st.session_state["intro_done"] = True
-    html(INTRO3D_CSS)
-    with st.container(key="intro3d"):
-        components.html(intro3d_page(), height=600)
 
 # ----------------------------------------------------------------------------
 # Barre de navigation + bandeau des scores
@@ -1236,6 +1251,6 @@ else:
 
 html("""
 <div class="footer">
-  © 2026 CourtSide · Predictions for entertainment only
+  © 2026 CourtSide
 </div>
 """)
