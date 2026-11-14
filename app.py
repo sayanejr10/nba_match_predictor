@@ -1223,7 +1223,7 @@ def _league_forms(player, first=False):
     t_join, t_new = st.tabs(["Join with a code", "Start a league"])
     with t_join:
         with st.form(f"ba_join_{first}", border=False, clear_on_submit=True):
-            code = st.text_input("League code", max_chars=8, placeholder="K7P2QX",
+            code = st.text_input("League code", max_chars=8,
                                  value=st.session_state.get("ba_join_code", ""))
             if st.form_submit_button("Join league", use_container_width=True):
                 if st.session_state.get("ba_join_fails", 0) >= 10:
