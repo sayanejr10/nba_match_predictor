@@ -597,7 +597,7 @@ table.std tr.sel td:first-child { box-shadow: inset 5px 0 0 #C2410C; }
           text-transform: uppercase; color: var(--ink); background: #FACC15; border: 2px solid var(--ink); border-radius: 7px;
           padding: 4px 9px 3px; box-shadow: 2px 2px 0 var(--ink); transform: rotate(1.5deg); }
 .ba-intro { margin: 6px 0 0; font-size: 15px; color: var(--ink); }
-.ba-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 6px; text-align: center;
+.ba-board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: 6px; text-align: center;
             background: #0B1220; color: #fff; border-radius: 14px; padding: 12px 10px 12px; max-width: 100%; }
 .ba-board .ba-who { grid-column: 1 / -1; font-family: var(--display); font-size: 20px; color: #FACC15; letter-spacing: .5px;
                     overflow-wrap: anywhere; }
@@ -1180,22 +1180,10 @@ def _game_info():
 
 
 def _scores(picks, winners, info):
-    """Bilan d'un joueur : bons pronostics, matchs terminés, série en cours."""
-    right = played = 0
-    timeline = []
-    for gid, team in picks.items():
-        if gid not in winners:
-            continue
-        played += 1
-        ok = team == winners[gid]
-        right += ok
-        timeline.append((info[gid].START_UTC, ok))
-    streak = 0
-    for _, ok in sorted(timeline, reverse=True):
-        if not ok:
-            break
-        streak += 1
-    return {"right": right, "played": played, "streak": streak,
+    """Bilan d'un joueur : bons pronostics et matchs terminés."""
+    played = sum(1 for gid in picks if gid in winners)
+    right = sum(1 for gid, team in picks.items() if gid in winners and team == winners[gid])
+    return {"right": right, "played": played,
             "pct": round(100 * right / played) if played else None}
 
 
@@ -1413,7 +1401,6 @@ def render_beat_ai():
           <div class="ba-who">{escape(player["pseudo"])}</div>
           <div class="ba-stat"><b class="num">{sc["right"]}</b><small>Right picks</small></div>
           <div class="ba-stat"><b class="num">{"–" if sc["pct"] is None else f'{sc["pct"]}%'}</b><small>Hit rate</small></div>
-          <div class="ba-stat"><b class="num">{sc["streak"]}</b><small>Streak</small></div>
         </div>
         """)
         flash = st.session_state.pop("ba_flash", None)
@@ -1609,6 +1596,6 @@ else:
 
 html("""
 <div class="footer">
-  © 2026 CourtSide
+  © 2026 CourtSide · Predictions for entertainment only
 </div>
 """)
