@@ -603,8 +603,16 @@ table.std tr.sel td:first-child { box-shadow: inset 5px 0 0 #C2410C; }
                     overflow-wrap: anywhere; }
 .ba-board .ba-stat b { display: block; font-family: var(--num); font-weight: 400; font-size: 38px; line-height: 1.05; }
 .ba-board .ba-stat small { display: block; font-family: var(--num); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #CBD5E1; }
-.ba-rule { font-size: 12.5px; color: #64748B; margin: 6px 0 4px; line-height: 1.45; }
-.ba-rule b { color: var(--ink); font-weight: 600; }
+.ba-how { background: #FEF9C3; border: 2.5px solid var(--ink); border-radius: 12px; box-shadow: 3px 3px 0 var(--ink);
+          padding: 12px 14px 12px; margin: 4px 0 14px; color: var(--ink); }
+.ba-how-t { font-family: var(--num); font-size: 13px; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+.ba-how ol { margin: 0 0 8px 1.2em; padding: 0; font-size: 14px; line-height: 1.5; }
+.ba-how li { margin: 2px 0; }
+.ba-how li b { font-weight: 700; }
+.ba-ex { font-size: 13px; line-height: 1.5; background: #fff; border: 2px dashed var(--ink); border-radius: 8px; padding: 6px 10px; }
+.ba-ex span { font-family: var(--num); font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase;
+              background: var(--ink); color: #FACC15; border-radius: 5px; padding: 2px 6px 1px; margin-right: 4px; }
+.ba-ex b { color: #C2410C; }
 .ba-league { margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .ba-lname { font-family: var(--display); font-size: 22px; color: var(--ink); line-height: 1.1; overflow-wrap: anywhere; }
 .ba-lname small { display: block; font-family: var(--body, inherit); font-size: 12px; color: #64748B; }
@@ -1143,7 +1151,7 @@ def render_grid(title=None):
     html(f"""
     <div class="day-head">
       <h2>{title or 'Games on <span>' + fr_day(day) + '</span>'}</h2>
-      <span class="sub">{icon("clock", 13)} {n} game{"s" if n != 1 else ""}</span>
+      <span class="sub">{icon("clock", 13)} {n} game{"s" if n != 1 else ""} · times shown in Cotonou time</span>
     </div>
     """)
     if n == 0:
@@ -1318,7 +1326,6 @@ def _render_league(player, leagues, winners, info):
       <tr><th>#</th><th>Player</th><th class="r">Pts</th><th class="r">Right</th></tr>
       {rows}
     </table></div>
-    <p class="ba-rule">A right pick scores <b>players in the league ÷ players who got it right</b>. The fewer friends on your side, the more you score. Nobody can see the others' picks.</p>
     """)
     c1, c2 = st.columns(2)
     c1.link_button("Invite on WhatsApp", "https://wa.me/?text=" + quote(share), use_container_width=True)
@@ -1357,6 +1364,15 @@ def render_beat_ai():
         <div class="ba-head">
           <h3>Pick<span>'em</span></h3>
           <span class="ba-tag">{icon("target", 13)} Private leagues · rare right picks score big</span>
+        </div>
+        <div class="ba-how">
+          <div class="ba-how-t">How it works</div>
+          <ol>
+            <li><b>Pick</b> the winner of each game, until tip-off.</li>
+            <li><b>Score</b>: a right pick earns <b>players in your league ÷ players who got it right</b>.</li>
+            <li><b>Win your league</b> by being right when your friends are wrong. Nobody sees the others' picks.</li>
+          </ol>
+          <div class="ba-ex"><span>Example</span> League of 10, Denver wins. 8 friends picked Denver: <b>1 pt</b> each. Only 2 picked Denver: <b>5 pts</b> each. You alone: <b>10 pts</b>.</div>
         </div>
         """)
         if not player:
