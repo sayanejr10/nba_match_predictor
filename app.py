@@ -603,6 +603,8 @@ table.std tr.sel td:first-child { box-shadow: inset 5px 0 0 #C2410C; }
                     overflow-wrap: anywhere; }
 .ba-board .ba-stat b { display: block; font-family: var(--num); font-weight: 400; font-size: 38px; line-height: 1.05; }
 .ba-board .ba-stat small { display: block; font-family: var(--num); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #CBD5E1; }
+.ba-rule { font-size: 12.5px; color: #64748B; margin: 6px 0 4px; line-height: 1.45; }
+.ba-rule b { color: var(--ink); font-weight: 600; }
 .ba-league { margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .ba-lname { font-family: var(--display); font-size: 22px; color: var(--ink); line-height: 1.1; overflow-wrap: anywhere; }
 .ba-lname small { display: block; font-family: var(--body, inherit); font-size: 12px; color: #64748B; }
@@ -1266,6 +1268,23 @@ def _league_forms(player, first=False):
                         _ba_error(e)
 
 
+def _league_points(per, winners, info, n_members):
+    """Points de ligue : un bon pronostic vaut (membres de la ligue ÷ membres qui ont eu juste), arrondi.
+    Copier le favori ne rapporte presque rien si tout le monde le fait ; avoir raison seul contre tous rapporte gros."""
+    right_count = {}
+    for pk in per.values():
+        for gid, team in pk.items():
+            if gid in winners and team == winners[gid]:
+                right_count[gid] = right_count.get(gid, 0) + 1
+    out = []
+    for pid, pk in per.items():
+        s_ = _scores(pk, winners, info)
+        pts = sum(max(1, int(n_members / right_count[gid] + 0.5))
+                  for gid, team in pk.items() if gid in winners and team == winners[gid])
+        out.append({"pid": pid, "pts": pts, "right": s_["right"], "played": s_["played"]})
+    return out
+
+
 def _render_league(player, leagues, winners, info):
     ids = [l["id"] for l in leagues]
     if st.session_state.get("ba_league") not in ids:
@@ -1282,16 +1301,13 @@ def _render_league(player, leagues, winners, info):
     per = {pid: {} for pid in names}
     for r in picks:
         per.setdefault(r["player_id"], {})[r["game_id"]] = r["picked_team"]
-    board = []
-    for pid, pk in per.items():
-        s_ = _scores(pk, winners, info)
-        board.append((s_["right"], s_["pct"] or 0, s_["played"], names.get(pid, "?"), pid, s_["pct"]))
-    board.sort(key=lambda x: (-x[0], -x[1], x[3].lower()))
+    board = _league_points(per, winners, info, len(names))
+    board.sort(key=lambda b: (-b["pts"], -b["right"], names.get(b["pid"], "?").lower()))
     rows = "".join(
-        f'<tr class="{"sel" if pid == player["id"] else ""}"><td class="rk"><span class="seed s{min(i + 1, 4)}">{i + 1}</span></td>'
-        f'<td>{escape(name)}</td><td class="r">{right}/{played}</td>'
-        f'<td class="r">{"–" if pct is None else f"{pct}%"}</td></tr>'
-        for i, (right, _, played, name, pid, pct) in enumerate(board))
+        f'<tr class="{"sel" if b["pid"] == player["id"] else ""}"><td class="rk"><span class="seed s{min(i + 1, 4)}">{i + 1}</span></td>'
+        f'<td>{escape(names.get(b["pid"], "?"))}</td><td class="r"><b class="num">{b["pts"]}</b></td>'
+        f'<td class="r">{b["right"]}/{b["played"]}</td></tr>'
+        for i, b in enumerate(board))
     share = f"Join my CourtSide league \"{lg['name']}\" and pick tonight's NBA winners: {APP_URL}/?join={lg['code']}"
     html(f"""
     <div class="ba-league">
@@ -1299,9 +1315,10 @@ def _render_league(player, leagues, winners, info):
       <div class="ba-code"><small>Invite code</small><b class="num">{lg["code"]}</b></div>
     </div>
     <div class="tbl-wrap"><table class="std ba-lb">
-      <tr><th>#</th><th>Player</th><th class="r">Right</th><th class="r">Hit %</th></tr>
+      <tr><th>#</th><th>Player</th><th class="r">Pts</th><th class="r">Right</th></tr>
       {rows}
     </table></div>
+    <p class="ba-rule">A right pick scores <b>players in the league ÷ players who got it right</b>. The fewer friends on your side, the more you score. Nobody can see the others' picks.</p>
     """)
     c1, c2 = st.columns(2)
     c1.link_button("Invite on WhatsApp", "https://wa.me/?text=" + quote(share), use_container_width=True)
@@ -1339,7 +1356,7 @@ def render_beat_ai():
         html(f"""
         <div class="ba-head">
           <h3>Pick<span>'em</span></h3>
-          <span class="ba-tag">{icon("target", 13)} Private leagues · 1 pt per right pick</span>
+          <span class="ba-tag">{icon("target", 13)} Private leagues · rare right picks score big</span>
         </div>
         """)
         if not player:
