@@ -57,6 +57,31 @@ ICONS = {
 st.set_page_config(page_title="CourtSide · NBA Match Predictor",
                    page_icon="static/icons/favicon.png", layout="wide")
 
+# ----------------------------------------------------------------------------
+# Langue : anglais par défaut, français au choix (?lang=fr), mémorisé dans un cookie
+# ----------------------------------------------------------------------------
+LANGS = ("en", "fr")
+_lang_q = st.query_params.get("lang")
+_lang_c = st.context.cookies.get("cs_lang")
+LANG = _lang_q if _lang_q in LANGS else (_lang_c if _lang_c in LANGS else "en")
+FR = LANG == "fr"
+
+
+def T(en: str, fr: str) -> str:
+    """Le texte dans la langue choisie."""
+    return fr if FR else en
+
+
+WEEKDAYS_FR = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+MONTHS_FR = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."]
+MONTHS_FULL_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août",
+                  "septembre", "octobre", "novembre", "décembre"]
+
+
+def wd_short(i: int) -> str:
+    """Jour abrégé : « Sun » / « dim. »"""
+    return WEEKDAYS_FR[i][:3] + "." if FR else WEEKDAYS[i][:3]
+
 
 def html(block: str, target=st) -> None:
     """Affiche du HTML. On retire l'indentation, sinon Markdown le prend pour du code."""
@@ -147,6 +172,15 @@ header[data-testid="stHeader"] { display: none; }
 .brand .wm span { color: #60A5FA; }
 .brand .tl { font-size: 12px; color: #94A3B8; margin-top: 3px; }
 .nav-meta { display: flex; gap: 16px; align-items: center; }
+.nav-right { display: flex; gap: 14px; align-items: center; }
+.lang-sw { display: inline-flex; border: 2.5px solid #fff; border-radius: 10px; overflow: hidden; background: #0B1220;
+           box-shadow: 2px 2px 0 #FACC15; transform: rotate(1.5deg); }
+.lang-sw a { font-family: var(--num); font-size: 13px; letter-spacing: 1px; color: #fff !important; text-decoration: none !important;
+             padding: 6px 10px 4px; min-width: 44px; min-height: 32px; display: inline-flex; align-items: center; justify-content: center; }
+.lang-sw a + a { border-left: 2.5px solid #fff; }
+.lang-sw a.on { background: #FACC15; color: #0B1220 !important; }
+.lang-sw a:not(.on):hover { background: #1E293B; }
+.lang-sw a:focus-visible { outline: 3px solid #60A5FA; outline-offset: -3px; }
 .nav-pill { display: inline-flex; align-items: center; gap: 8px; padding: 5px 6px 5px 11px;
             background: #fff; color: var(--ink); border: 2.5px solid var(--ink); border-radius: 10px;
             box-shadow: 4px 4px 0 #60A5FA; transform: rotate(-1.5deg);
@@ -780,20 +814,25 @@ def latest_scores(games, n=16):
 
 
 def fr_day(d):
-    """« Sunday, November 8 »"""
+    """« Sunday, November 8 » / « dimanche 8 novembre »"""
+    if FR:
+        return f"{WEEKDAYS_FR[d.weekday()]} {d.day} {MONTHS_FULL_FR[d.month - 1]}"
     full_months = ["January", "February", "March", "April", "May", "June", "July", "August",
                    "September", "October", "November", "December"]
     return f"{WEEKDAYS[d.weekday()]}, {full_months[d.month - 1]} {d.day}"
 
 
 def fr_date(d, year=True):
+    """« Nov 8, 2026 » / « 8 nov. 2026 »"""
+    if FR:
+        return f"{d.day} {MONTHS_FR[d.month - 1]}" + (f" {d.year}" if year else "")
     return f"{MONTHS[d.month - 1]} {d.day}" + (f", {d.year}" if year else "")
 
 
 def form_bars(results):
-    label = ", ".join("win" if r == "W" else "loss" for r in results)
+    label = ", ".join(T("win", "victoire") if r == "W" else T("loss", "défaite") for r in results)
     bars = "".join(f'<i class="{r}" style="--i:{j}"></i>' for j, r in enumerate(results))
-    return f'<span class="form" role="img" aria-label="Last 5 games: {label}">{bars}</span>'
+    return f'<span class="form" role="img" aria-label="{T("Last 5 games", "5 derniers matchs")}: {label}">{bars}</span>'
 
 
 # ----------------------------------------------------------------------------
@@ -832,8 +871,8 @@ def game_card(k, team, state):
         f'<span class="s" style="--cd:{.9 + k * .15:.2f}s">{count(pts)}</span></div>'
         for t, pts in lines
     )
-    result = "Win" if g["wl"] == "W" else "Loss"
-    return (f'<div class="game cascade" style="--d0:.7s;--i:{k}"><div class="g-head"><span>{team} last game · {result}</span>'
+    result = T("Win", "Victoire") if g["wl"] == "W" else T("Loss", "Défaite")
+    return (f'<div class="game cascade" style="--d0:.7s;--i:{k}"><div class="g-head"><span>{T(f"{team} last game", f"Dernier match {team}")} · {result}</span>'
             f'<span>{fr_date(g["date"], year=False)}</span></div>{body}</div>')
 
 
@@ -892,17 +931,23 @@ with st.container(key="headjar"):
       add("meta", {name: "apple-mobile-web-app-capable", content: "yes"});
       add("meta", {name: "mobile-web-app-capable", content: "yes"});
       add("meta", {name: "theme-color", content: "#0B1220"});
-    } catch (e) {}</script>""", height=0)
+      window.parent.document.documentElement.lang = "__LANG__";
+      __SETLANG__
+    } catch (e) {}</script>""".replace("__LANG__", LANG).replace(
+        "__SETLANG__",
+        f'window.parent.document.cookie = "cs_lang={LANG}; Max-Age=31536000; Path=/; SameSite=Lax";'
+        if _lang_q in LANGS and _lang_q != _lang_c else ""), height=0)
 
 if not st.session_state.get("intro_done") and st.query_params.get("intro") != "0":
     st.session_state["intro_done"] = True
     html(INTRO3D_CSS)
     with st.container(key="intro3d"):
-        components.html(intro3d_page(), height=600)
+        components.html(intro3d_page(LANG), height=600)
 
 # Petit sticker d'attente (au lieu des messages techniques de Streamlit) pendant le chargement
 _loading = st.empty()
-_loading.markdown('<div class="cs-loading"><span>Loading tonight\'s games…</span></div>', unsafe_allow_html=True)
+_loading.markdown('<div class="cs-loading"><span>' + T("Loading tonight’s games…", "Chargement des matchs…")
+                  + '</span></div>', unsafe_allow_html=True)
 
 bundle = load_model()
 model, features = bundle["model"], bundle["features"]
@@ -911,7 +956,8 @@ try:
 except Exception:  # les deux sources sont indisponibles
     if DEBUG:
         raise  # en mode développeur, on veut voir l'erreur complète
-    st.error("Live NBA data is temporarily unavailable. Please try again in a few minutes.")
+    st.error(T("Live NBA data is temporarily unavailable. Please try again in a few minutes.",
+              "Les données NBA sont momentanément indisponibles. Réessaie dans quelques minutes."))
     st.stop()
 _loading.empty()
 
@@ -957,10 +1003,10 @@ def predict(home_t, away_t, day):
 def local_time(g):
     """Heure de Cotonou. Si le match tombe le lendemain à Cotonou, on ajoute le jour (« lun. 02:30 »)."""
     if pd.isna(g.START_UTC):
-        return "Time TBD"
+        return T("Time TBD", "Heure à venir")
     t = g.START_UTC.tz_convert(LOCAL_TZ)
     hhmm = t.strftime("%H:%M")
-    return hhmm if t.date() == g.US_DATE.date() else f"{WEEKDAYS[t.weekday()][:3]} {hhmm}"
+    return hhmm if t.date() == g.US_DATE.date() else f"{wd_short(t.weekday())} {hhmm}"
 
 
 def pct(p):
@@ -970,7 +1016,7 @@ def pct(p):
 
 def link(day, game_id=None):
     """Lien interne : garde la date, ouvre un match, et ne rejoue pas l'intro."""
-    return f"?date={day.isoformat()}" + (f"&match={game_id}" if game_id else "") + "&intro=0"
+    return f"?date={day.isoformat()}" + (f"&match={game_id}" if game_id else "") + f"&lang={LANG}&intro=0"
 
 
 # ----------------------------------------------------------------------------
@@ -1004,18 +1050,27 @@ def _shift(n):
 # Barre de navigation + bandeau des scores
 # ----------------------------------------------------------------------------
 scores = latest_scores(games)
+_sel_q = st.query_params.get("match")
+lang_links = "".join(
+    f'<a href="?date={st.session_state["day"].isoformat()}{f"&match={_sel_q}" if _sel_q else ""}&lang={code}&intro=0" '
+    f'target="_self" class="{"on" if code == LANG else ""}" lang="{code}" '
+    f'aria-current="{"true" if code == LANG else "false"}">{code.upper()}</a>'
+    for code in LANGS)
 html(f"""
 <nav class="nav">
   <div class="brand">
     <img src="{NBA_LOGO}" alt="NBA">
     <div class="wm">Court<span>Side</span></div>
   </div>
-  <div class="nav-meta">
-    <span class="nav-pill">{icon("calendar", 14)} Season <b>{CURRENT_SEASON}</b></span>
+  <div class="nav-right">
+    <div class="nav-meta">
+      <span class="nav-pill">{icon("calendar", 14)} {T("Season", "Saison")} <b>{CURRENT_SEASON}</b></span>
+    </div>
+    <div class="lang-sw" role="group" aria-label="Language / Langue">{lang_links}</div>
   </div>
 </nav>
 <div class="ticker" aria-hidden="true"><div class="ticker-track">
-  <span class="tag">Latest scores</span>{scores}<span class="tag">Latest scores</span>{scores}
+  <span class="tag">{T("Latest scores", "Derniers scores")}</span>{scores}<span class="tag">{T("Latest scores", "Derniers scores")}</span>{scores}
 </div></div>
 """)
 
@@ -1024,11 +1079,12 @@ html(f"""
 # ----------------------------------------------------------------------------
 with st.container(key="datebar"):
     c_prev, c_date, c_next, c_today = st.columns([1, 2.2, 1, 1], vertical_alignment="bottom")
-    c_prev.button("Prev", icon=":material/chevron_left:", on_click=_shift, args=(-1,), use_container_width=True)
-    c_date.date_input("Game date", key="day", format="MM/DD/YYYY", on_change=_clear_match)
-    c_next.button("Next", icon=":material/chevron_right:",
+    c_prev.button(T("Prev", "Préc."), icon=":material/chevron_left:", on_click=_shift, args=(-1,), use_container_width=True)
+    c_date.date_input(T("Game date", "Date des matchs"), key="day",
+                      format="DD/MM/YYYY" if FR else "MM/DD/YYYY", on_change=_clear_match)
+    c_next.button(T("Next", "Suiv."), icon=":material/chevron_right:",
                   on_click=_shift, args=(1,), use_container_width=True)
-    c_today.button("Today", on_click=lambda: (st.session_state.update(day=US_TODAY), _clear_match()),
+    c_today.button(T("Today", "Auj."), on_click=lambda: (st.session_state.update(day=US_TODAY), _clear_match()),
                    use_container_width=True)
 
 day = st.session_state["day"]
@@ -1047,9 +1103,9 @@ def game_tile(k, g):
     p, _, _ = predict(hm, aw, day_ts)
     status = g.gameStatus
     if status == 3:
-        top = '<span class="gfinal">Final</span>'
+        top = f'<span class="gfinal">{T("Final", "Terminé")}</span>'
     elif status == 2:
-        top = '<span class="glive">Live</span>'
+        top = f'<span class="glive">{T("Live", "En direct")}</span>'
     else:
         top = f'<span class="gtime">{local_time(g)}</span>'
 
@@ -1069,19 +1125,19 @@ def game_tile(k, g):
     body = line(aw, None if p is None else 1 - p, as_, away_lead) + line(hm, p, hs, home_lead)
 
     if p is None:
-        foot = '<span class="chip na">Not enough games yet</span>'
+        foot = f'<span class="chip na">{T("Not enough games yet", "Pas encore assez de matchs")}</span>'
     elif status == 3:
         ok = (p >= .5) == (hs > as_)
-        foot = (f'<span class="chip ok">{icon("check", 12)} Correct pick</span>' if ok
-                else f'<span class="chip miss">{icon("x", 12)} Missed pick</span>')
+        foot = (f'<span class="chip ok">{icon("check", 12)} {T("Correct pick", "Bonne prédiction")}</span>' if ok
+                else f'<span class="chip miss">{icon("x", 12)} {T("Missed pick", "Prédiction ratée")}</span>')
     else:
         fav_t, fav_p = (hm, p) if p >= .5 else (aw, 1 - p)
-        foot = f'<span class="chip fav">Favorite: {fav_t} {pct(fav_p)}%</span>'
+        foot = f'<span class="chip fav">{T("Favorite:", "Favori :")} {fav_t} {pct(fav_p)}%</span>'
     sel = "sel" if g.gameId == selected else ""
     return (f'<a class="gcard cascade {sel}" href="{link(day, g.gameId)}" target="_self" style="--d0:.15s;--i:{k}"'
-            f' aria-label="{full_name.get(aw, aw)} at {full_name.get(hm, hm)}, see the prediction">'
+            f' aria-label="{T(f"{full_name.get(aw, aw)} at {full_name.get(hm, hm)}, see the prediction", f"{full_name.get(aw, aw)} chez {full_name.get(hm, hm)}, voir la prédiction")}">'
             f'<div class="gtop">{top}<span class="city">{icon("pin", 11)}{escape(g.arenaCity) if isinstance(g.arenaCity, str) else ""}</span></div>'
-            f'{body}<div class="gfoot">{foot}<span class="see">View</span></div></a>')
+            f'{body}<div class="gfoot">{foot}<span class="see">{T("View", "Voir")}</span></div></a>')
 
 
 table = standings(games, day_ts)
@@ -1116,8 +1172,9 @@ model_card = f"""
 
 def standings_card(highlight=()):
     if table.empty:
-        return ('<section class="card empty" style="--d:.4s"><b>Standings</b>'
-                'The standings will appear once the first games of the season have been played.</section>')
+        return (f'<section class="card empty" style="--d:.4s"><b>{T("Standings", "Classement")}</b>'
+                + T("The standings will appear once the first games of the season have been played.",
+                    "Le classement apparaîtra après les premiers matchs de la saison.") + '</section>')
     shown = table[(table.index < 10) | table["TEAM"].isin(list(highlight))]
     rows, prev = [], -1
     for n_row, (i, r) in enumerate(shown.iterrows()):
@@ -1136,10 +1193,10 @@ def standings_card(highlight=()):
         """)
     return f"""
     <section class="card" style="--d:.4s">
-      <div class="card-head"><h3>Standings</h3><span>Season {CURRENT_SEASON} · before {fr_date(day_ts, year=False)}</span></div>
+      <div class="card-head"><h3>{T("Standings", "Classement")}</h3><span>{T("Season", "Saison")} {CURRENT_SEASON} · {T("before", "avant le")} {fr_date(day_ts, year=False)}</span></div>
       <div class="tbl-wrap">
         <table class="std">
-          <tr><th>#</th><th>Team</th><th class="r">W-L</th><th class="r">Win %</th><th class="r">Diff</th><th>Form</th></tr>
+          <tr><th>#</th><th>{T("Team", "Équipe")}</th><th class="r">{T("W-L", "V-D")}</th><th class="r">{T("Win %", "% vict.")}</th><th class="r">Diff</th><th>{T("Form", "Forme")}</th></tr>
           {"".join(rows)}
         </table>
       </div>
@@ -1150,15 +1207,15 @@ def standings_card(highlight=()):
 def render_grid(title=None):
     html(f"""
     <div class="day-head">
-      <h2>{title or 'Games on <span>' + fr_day(day) + '</span>'}</h2>
-      <span class="sub">{icon("clock", 13)} {n} game{"s" if n != 1 else ""}</span>
+      <h2>{title or T('Games on <span>', 'Matchs du <span>') + fr_day(day) + '</span>'}</h2>
+      <span class="sub">{icon("clock", 13)} {T(f'{n} game{"s" if n != 1 else ""}', f'{n} match{"s" if n != 1 else ""} · heures de Cotonou')}</span>
     </div>
     """)
     if n == 0:
         html(f"""
         <div class="card empty">
-          <b>No games on this day</b>
-          Use the buttons to go to the previous or next day.
+          <b>{T("No games on this day", "Aucun match ce jour-là")}</b>
+          {T("Use the buttons to go to the previous or next day.", "Utilise les boutons pour aller au jour précédent ou suivant.")}
         </div>
         """)
     else:
@@ -1210,7 +1267,13 @@ def _set_cookie(value, max_age):
 def _ba_error(e):
     if DEBUG:
         raise e
-    st.error("Pick'em is temporarily unavailable. Please try again in a moment.")
+    st.error(T("Pick'em is temporarily unavailable. Please try again in a moment.",
+               "Le jeu est momentanément indisponible. Réessaie dans un instant."))
+
+
+def _err(e):
+    """Message d'erreur du jeu dans la langue choisie."""
+    return getattr(e, "fr", str(e)) if FR else str(e)
 
 
 def _on_pick(gid, key):
@@ -1221,57 +1284,62 @@ def _on_pick(gid, key):
         return
     started = g.gameStatus != 1 or (pd.notna(g.START_UTC) and g.START_UTC <= pd.Timestamp.now(tz="UTC"))
     if started or team not in (g.homeTeam_teamTricode, g.awayTeam_teamTricode):
-        st.session_state["ba_flash"] = ("error", "This game has already started: picks are locked.")
+        st.session_state["ba_flash"] = ("error", T("This game has already started: picks are locked.",
+                                                   "Ce match a déjà commencé : les pronostics sont fermés."))
         return
     try:
         beat_ai.save_pick(player["id"], gid, team)
-        st.session_state["ba_flash"] = ("success", f"Pick saved: {team}")
+        st.session_state["ba_flash"] = ("success", T(f"Pick saved: {team}", f"Pronostic enregistré : {team}"))
         _league_data.clear()
     except Exception as e:
         if DEBUG:
             raise
-        st.session_state["ba_flash"] = ("error", "Could not save your pick. Please try again.")
+        st.session_state["ba_flash"] = ("error", T("Could not save your pick. Please try again.",
+                                                   "Impossible d'enregistrer ton pronostic. Réessaie."))
 
 
 def _league_forms(player, first=False):
     """Rejoindre une ligue avec un code, ou en créer une."""
-    t_join, t_new = st.tabs(["Join with a code", "Start a league"])
+    t_join, t_new = st.tabs([T("Join with a code", "Rejoindre avec un code"), T("Start a league", "Créer une ligue")])
     with t_join:
         with st.form(f"ba_join_{first}", border=False, clear_on_submit=True):
-            code = st.text_input("League code", max_chars=8,
+            code = st.text_input(T("League code", "Code de la ligue"), max_chars=8,
                                  value=st.session_state.get("ba_join_code", ""))
-            if st.form_submit_button("Join league", use_container_width=True):
+            if st.form_submit_button(T("Join league", "Rejoindre la ligue"), use_container_width=True):
                 if st.session_state.get("ba_join_fails", 0) >= 10:
-                    st.error("Too many wrong codes. Try again later.")
+                    st.error(T("Too many wrong codes. Try again later.", "Trop de mauvais codes. Réessaie plus tard."))
                 else:
                     try:
                         lg = beat_ai.join_league(player["id"], code)
                         _league_data.clear()
                         st.session_state.pop("ba_join_code", None)
                         st.session_state["ba_league"] = lg["id"]
-                        st.session_state["ba_flash"] = ("success", f"Welcome to {lg['name']}!")
+                        st.session_state["ba_flash"] = ("success", T(f"Welcome to {lg['name']}!", f"Bienvenue dans {lg['name']} !"))
                         st.rerun()
                     except beat_ai.BeatAIError as e:
                         st.session_state["ba_join_fails"] = st.session_state.get("ba_join_fails", 0) + 1
-                        st.error(str(e))
+                        st.error(_err(e))
                     except Exception as e:
                         _ba_error(e)
     with t_new:
         with st.form(f"ba_create_{first}", border=False, clear_on_submit=True):
-            name = st.text_input("League name", max_chars=30, placeholder="The Block Ballers")
-            if st.form_submit_button("Create league", use_container_width=True):
+            name = st.text_input(T("League name", "Nom de la ligue"), max_chars=30,
+                                 placeholder=T("The Block Ballers", "Les Gars du Quartier"))
+            if st.form_submit_button(T("Create league", "Créer la ligue"), use_container_width=True):
                 if st.session_state.get("ba_created", 0) >= 3:
-                    st.error("You just created several leagues. Try again later.")
+                    st.error(T("You just created several leagues. Try again later.",
+                               "Tu viens de créer plusieurs ligues. Réessaie plus tard."))
                 else:
                     try:
                         lg = beat_ai.create_league(player["id"], name)
                         _league_data.clear()
                         st.session_state["ba_created"] = st.session_state.get("ba_created", 0) + 1
                         st.session_state["ba_league"] = lg["id"]
-                        st.session_state["ba_flash"] = ("success", f"{lg['name']} is ready. Share the code with your friends!")
+                        st.session_state["ba_flash"] = ("success", T(f"{lg['name']} is ready. Share the code with your friends!",
+                                                                     f"{lg['name']} est prête. Partage le code avec tes amis !"))
                         st.rerun()
                     except beat_ai.BeatAIError as e:
-                        st.error(str(e))
+                        st.error(_err(e))
                     except Exception as e:
                         _ba_error(e)
 
@@ -1316,24 +1384,26 @@ def _render_league(player, leagues, winners, info):
         f'<td>{escape(names.get(b["pid"], "?"))}</td><td class="r"><b class="num">{b["pts"]}</b></td>'
         f'<td class="r">{b["right"]}/{b["played"]}</td></tr>'
         for i, b in enumerate(board))
-    share = f"Join my CourtSide league \"{lg['name']}\" and pick tonight's NBA winners: {APP_URL}/?join={lg['code']}"
+    share = T(f"Join my CourtSide league \"{lg['name']}\" and pick tonight's NBA winners: ",
+              f"Rejoins ma ligue CourtSide « {lg['name']} » et pronostique les matchs NBA du soir : ") \
+        + f"{APP_URL}/?join={lg['code']}&lang={LANG}"
     html(f"""
     <div class="ba-league">
-      <div class="ba-lname">{escape(lg["name"])}<small>{len(names)} player{"s" if len(names) != 1 else ""}</small></div>
-      <div class="ba-code"><small>Invite code</small><b class="num">{lg["code"]}</b></div>
+      <div class="ba-lname">{escape(lg["name"])}<small>{len(names)} {T("player", "joueur")}{"s" if len(names) != 1 else ""}</small></div>
+      <div class="ba-code"><small>{T("Invite code", "Code d'invitation")}</small><b class="num">{lg["code"]}</b></div>
     </div>
     <div class="tbl-wrap"><table class="std ba-lb">
-      <tr><th>#</th><th>Player</th><th class="r">Pts</th><th class="r">Right</th></tr>
+      <tr><th>#</th><th>{T("Player", "Joueur")}</th><th class="r">Pts</th><th class="r">{T("Right", "Justes")}</th></tr>
       {rows}
     </table></div>
     """)
     c1, c2 = st.columns(2)
-    c1.link_button("Invite on WhatsApp", "https://wa.me/?text=" + quote(share), use_container_width=True)
-    with c2.popover("More", use_container_width=True):
-        st.caption("Join another league or start a new one.")
+    c1.link_button(T("Invite on WhatsApp", "Inviter sur WhatsApp"), "https://wa.me/?text=" + quote(share), use_container_width=True)
+    with c2.popover(T("More", "Plus"), use_container_width=True):
+        st.caption(T("Join another league or start a new one.", "Rejoins une autre ligue ou crées-en une nouvelle."))
         _league_forms(player)
         st.divider()
-        if st.button(f"Leave {lg['name']}", key="ba_leave", type="tertiary"):
+        if st.button(T(f"Leave {lg['name']}", f"Quitter {lg['name']}"), key="ba_leave", type="tertiary"):
             try:
                 beat_ai.leave_league(player["id"], lg["id"])
                 _league_data.clear()
@@ -1362,51 +1432,62 @@ def render_beat_ai():
     with st.container(key="beatai"):
         html(f"""
         <div class="ba-head">
-          <h3>Pick<span>'em</span></h3>
-          <span class="ba-tag">{icon("target", 13)} Private leagues · rare right picks score big</span>
+          <h3>{T("Pick<span>'em</span>", "Pro<span>nos</span>")}</h3>
+          <span class="ba-tag">{icon("target", 13)} {T("Private leagues · rare right picks score big",
+                                                         "Ligues privées · les bons choix rares rapportent gros")}</span>
         </div>
         <div class="ba-how">
-          <div class="ba-how-t">How it works</div>
-          <ol>
-            <li><b>Pick</b> the winner of each game, until tip-off.</li>
-            <li><b>Score</b>: a right pick earns <b>players in your league ÷ players who got it right</b>.</li>
-            <li><b>Win your league</b> by being right when your friends are wrong. Nobody sees the others' picks.</li>
+          <div class="ba-how-t">{T("How it works", "Comment ça marche")}</div>
+          <ol>{T(
+            "<li><b>Pick</b> the winner of each game, until tip-off.</li>"
+            "<li><b>Score</b>: a right pick earns <b>players in your league ÷ players who got it right</b>.</li>"
+            "<li><b>Win your league</b> by being right when your friends are wrong. Nobody sees the others' picks.</li>",
+            "<li><b>Choisis</b> le vainqueur de chaque match, jusqu'au coup d'envoi.</li>"
+            "<li><b>Marque des points</b> : un bon pronostic rapporte <b>joueurs de ta ligue ÷ joueurs qui ont eu juste</b>.</li>"
+            "<li><b>Gagne ta ligue</b> en ayant raison quand tes amis ont tort. Personne ne voit les choix des autres.</li>")}
           </ol>
-          <div class="ba-ex"><span>Example</span> League of 10, Denver wins. 8 friends picked Denver: <b>1 pt</b> each. Only 2 picked Denver: <b>5 pts</b> each. You alone: <b>10 pts</b>.</div>
+          <div class="ba-ex"><span>{T("Example", "Exemple")}</span> {T(
+            "League of 10, Denver wins. 8 friends picked Denver: <b>1 pt</b> each. Only 2 picked Denver: <b>5 pts</b> each. You alone: <b>10 pts</b>.",
+            "Ligue de 10, Denver gagne. 8 amis ont pris Denver : <b>1 pt</b> chacun. Seulement 2 ont pris Denver : <b>5 pts</b> chacun. Toi seul : <b>10 pts</b>.")}</div>
         </div>
         """)
         if not player:
             invited = st.session_state.get("ba_join_code")
             html('<p class="ba-intro">'
-                 + ("You've been invited to a league! Create your player (or sign in) to join it."
+                 + (T("You've been invited to a league! Create your player (or sign in) to join it.",
+                      "Tu es invité dans une ligue ! Crée ton joueur (ou connecte-toi) pour la rejoindre.")
                     if invited else
-                    "Pick tonight's winners and battle your friends in a private league. "
-                    "Create a player in 10 seconds.")
+                    T("Pick tonight's winners and battle your friends in a private league. Create a player in 10 seconds.",
+                      "Pronostique les matchs du soir et affronte tes amis dans une ligue privée. Crée ton joueur en 10 secondes."))
                  + '</p>')
-            t_new, t_in = st.tabs(["New player", "Sign in"]) if invited else st.tabs(["Sign in", "New player"])[::-1]
+            l_new, l_in = T("New player", "Nouveau joueur"), T("Sign in", "Connexion")
+            t_new, t_in = st.tabs([l_new, l_in]) if invited else st.tabs([l_in, l_new])[::-1]
             with t_in:
                 with st.form("ba_login", border=False):
-                    u = st.text_input("Username", max_chars=16, key="ba_u1")
-                    pin = st.text_input("6-digit PIN", type="password", max_chars=6, key="ba_p1")
-                    if st.form_submit_button("Sign in", use_container_width=True):
+                    u = st.text_input(T("Username", "Pseudo"), max_chars=16, key="ba_u1")
+                    pin = st.text_input(T("6-digit PIN", "Code PIN à 6 chiffres"), type="password", max_chars=6, key="ba_p1")
+                    if st.form_submit_button(T("Sign in", "Se connecter"), use_container_width=True):
                         try:
                             pl = beat_ai.login(u, pin)
                             st.session_state["ba_player"] = pl
                             st.session_state["ba_cookie"] = (beat_ai.make_token(pl), beat_ai.SESSION_DAYS * 86400)
                             st.rerun()
                         except beat_ai.BeatAIError as e:
-                            st.error(str(e))
+                            st.error(_err(e))
                         except Exception as e:
                             _ba_error(e)
             with t_new:
                 with st.form("ba_new", border=False):
-                    u = st.text_input("Choose a username", max_chars=16, key="ba_u2",
-                                      help="3 to 16 characters: letters, numbers or _")
-                    pin = st.text_input("Choose a 6-digit PIN", type="password", max_chars=6, key="ba_p2",
-                                        help="Keep it safe: there is no way to recover it.")
-                    if st.form_submit_button("Create my player", use_container_width=True):
+                    u = st.text_input(T("Choose a username", "Choisis un pseudo"), max_chars=16, key="ba_u2",
+                                      help=T("3 to 16 characters: letters, numbers or _",
+                                             "3 à 16 caractères : lettres, chiffres ou _"))
+                    pin = st.text_input(T("Choose a 6-digit PIN", "Choisis un code PIN à 6 chiffres"), type="password",
+                                        max_chars=6, key="ba_p2",
+                                        help=T("Keep it safe: there is no way to recover it.",
+                                               "Garde-le bien : il est impossible de le récupérer."))
+                    if st.form_submit_button(T("Create my player", "Créer mon joueur"), use_container_width=True):
                         if st.session_state.get("ba_signups", 0) >= 3:
-                            st.error("Too many new players from this session.")
+                            st.error(T("Too many new players from this session.", "Trop de nouveaux joueurs depuis cette session."))
                         else:
                             try:
                                 pl = beat_ai.register(u, pin)
@@ -1415,7 +1496,7 @@ def render_beat_ai():
                                 st.session_state["ba_cookie"] = (beat_ai.make_token(pl), beat_ai.SESSION_DAYS * 86400)
                                 st.rerun()
                             except beat_ai.BeatAIError as e:
-                                st.error(str(e))
+                                st.error(_err(e))
                             except Exception as e:
                                 _ba_error(e)
             return
@@ -1432,8 +1513,8 @@ def render_beat_ai():
         html(f"""
         <div class="ba-board">
           <div class="ba-who">{escape(player["pseudo"])}</div>
-          <div class="ba-stat"><b class="num">{sc["right"]}</b><small>Right picks</small></div>
-          <div class="ba-stat"><b class="num">{"–" if sc["pct"] is None else f'{sc["pct"]}%'}</b><small>Hit rate</small></div>
+          <div class="ba-stat"><b class="num">{sc["right"]}</b><small>{T("Right picks", "Bons pronos")}</small></div>
+          <div class="ba-stat"><b class="num">{"–" if sc["pct"] is None else f'{sc["pct"]}%'}</b><small>{T("Hit rate", "Réussite")}</small></div>
         </div>
         """)
         flash = st.session_state.pop("ba_flash", None)
@@ -1441,7 +1522,7 @@ def render_beat_ai():
             (st.success if flash[0] == "success" else st.error)(flash[1])
 
         if n:
-            html(f'<div class="ba-sub">Your picks · {fr_day(day)}</div>')
+            html(f'<div class="ba-sub">{T("Your picks", "Tes pronostics")} · {fr_day(day)}</div>')
             now = pd.Timestamp.now(tz="UTC")
             for g in day_games.itertuples():
                 aw, hm, gid = g.awayTeam_teamTricode, g.homeTeam_teamTricode, g.gameId
@@ -1450,26 +1531,29 @@ def render_beat_ai():
                 if key not in st.session_state and gid in mine:
                     st.session_state[key] = mine[gid]
                 c1, c2 = st.columns([1, 1.4], vertical_alignment="center")
-                status = ("Final" if g.gameStatus == 3 else "Live" if g.gameStatus == 2
-                          else ("Locked" if started else local_time(g)))
+                status = (T("Final", "Terminé") if g.gameStatus == 3 else T("Live", "En direct") if g.gameStatus == 2
+                          else (T("Locked", "Fermé") if started else local_time(g)))
                 c1.markdown(f'<div class="ba-game"><b>{aw}</b> @ <b>{hm}</b><small>{status}</small></div>',
                             unsafe_allow_html=True)
-                c2.segmented_control("Winner", [aw, hm], key=key, label_visibility="collapsed",
+                c2.segmented_control(T("Winner", "Vainqueur"), [aw, hm], key=key, label_visibility="collapsed",
                                      disabled=started, on_change=_on_pick, args=(gid, key))
                 if gid in winners and gid in mine:
                     ok = mine[gid] == winners[gid]
-                    c1.markdown(f'<div class="ba-res {"ok" if ok else "miss"}">{"✓ You got it" if ok else "✗ Missed"}</div>',
+                    c1.markdown(f'<div class="ba-res {"ok" if ok else "miss"}">{T("✓ You got it", "✓ Bien vu") if ok else T("✗ Missed", "✗ Raté")}</div>',
                                 unsafe_allow_html=True)
 
         # ---------- Ligues privées
-        html('<div class="ba-sub">Your leagues</div>')
+        html(f'<div class="ba-sub">{T("Your leagues", "Tes ligues")}</div>')
         if leagues:
             _render_league(player, leagues, winners, info)
         else:
-            html('<p class="ba-intro">You are not in a league yet. Start one and send the code to your friends, '
-                 'or join theirs with the code they sent you.</p>')
+            html('<p class="ba-intro">' + T(
+                "You are not in a league yet. Start one and send the code to your friends, "
+                "or join theirs with the code they sent you.",
+                "Tu n'es dans aucune ligue pour l'instant. Crées-en une et envoie le code à tes amis, "
+                "ou rejoins la leur avec le code qu'ils t'ont envoyé.") + '</p>')
             _league_forms(player, first=True)
-        if st.button("Sign out", key="ba_out", type="tertiary"):
+        if st.button(T("Sign out", "Se déconnecter"), key="ba_out", type="tertiary"):
             st.session_state["ba_player"] = None
             st.session_state["ba_cookie"] = ("x", 0)
             for k in [k for k in st.session_state if str(k).startswith("ba_pick_")] + ["ba_league"]:
@@ -1489,8 +1573,9 @@ if match.empty:
         html(f"""
         <div class="card hint" style="--d:.3s">
           <span class="dot bouncing">{BALL_SVG}</span>
-          <div><b>Pick a game</b>
-          Tap any game above to see the full prediction: <mark>win probabilities</mark>, <mark>head-to-head</mark> and <mark>recent results</mark>.</div>
+          <div><b>{T("Pick a game", "Choisis un match")}</b>
+          {T("Tap any game above to see the full prediction: <mark>win probabilities</mark>, <mark>head-to-head</mark> and <mark>recent results</mark>.",
+             "Touche un match ci-dessus pour voir la prédiction complète : <mark>probabilités de victoire</mark>, <mark>face-à-face</mark> et <mark>derniers résultats</mark>.")}</div>
         </div>
         """)
     render_beat_ai()
@@ -1499,8 +1584,8 @@ if match.empty:
       {standings_card()}
       <div class="stack">
         <section class="card" style="--d:.5s">
-          <div class="card-head"><h3>Hot teams</h3><span>Last 10 games</span></div>
-          <div class="hot">{hot_rows or '<div class="empty">No games played yet.</div>'}</div>
+          <div class="card-head"><h3>{T("Hot teams", "Équipes en forme")}</h3><span>{T("Last 10 games", "10 derniers matchs")}</span></div>
+          <div class="hot">{hot_rows or '<div class="empty">' + T("No games played yet.", "Aucun match joué pour l'instant.") + '</div>'}</div>
         </section>
         {model_card if DEBUG else ""}
       </div>
@@ -1517,16 +1602,17 @@ else:
 
     html(f"""
     <div class="detail-head" style="margin-top:22px">
-      <h2>Prediction · <span style="color:var(--primary)">{full_name[away]} at {full_name[home]}</span></h2>
-      <a class="back" href="{link(day)}" target="_self">Close prediction</a>
+      <h2>{T("Prediction", "Prédiction")} · <span style="color:var(--primary)">{full_name[away]} {T("at", "chez")} {full_name[home]}</span></h2>
+      <a class="back" href="{link(day)}" target="_self">{T("Close prediction", "Fermer la prédiction")}</a>
     </div>
     """)
 
     if p_home is None:
-        html("""
+        html(f"""
         <div class="card empty">
-          <b>No prediction for this game yet</b>
-          One of the two teams hasn't played a game before this date, so the model has no form to analyze.
+          <b>{T("No prediction for this game yet", "Pas encore de prédiction pour ce match")}</b>
+          {T("One of the two teams hasn't played a game before this date, so the model has no form to analyze.",
+             "L'une des deux équipes n'a pas encore joué avant cette date : le modèle n'a pas de forme à analyser.")}
         </div>
         """)
         st.stop()
@@ -1534,24 +1620,26 @@ else:
     p_away = 1 - p_home
     fav, p_fav = (home, p_home) if p_home >= 0.5 else (away, p_away)
     if p_fav < 0.55:
-        verdict = f'<span class="verdict even">{icon("scale")} Toss-up, no clear favorite</span>'
+        verdict = f'<span class="verdict even">{icon("scale")} {T("Toss-up, no clear favorite", "Match serré, pas de vrai favori")}</span>'
     elif p_fav < 0.65:
-        verdict = f'<span class="verdict lean">{icon("trend")} Slight edge: {full_name[fav]}</span>'
+        verdict = f'<span class="verdict lean">{icon("trend")} {T("Slight edge:", "Léger avantage :")} {full_name[fav]}</span>'
     else:
-        verdict = f'<span class="verdict strong">{icon("trend")} {full_name[fav]} strong favorite</span>'
+        verdict = f'<span class="verdict strong">{icon("trend")} {T(f"{full_name[fav]} strong favorite", f"{full_name[fav]} grand favori")}</span>'
 
     # Match terminé : on montre le score final et si le modèle avait raison
     if g.gameStatus == 3:
         ok = (p_home >= .5) == (g.homeTeam_score > g.awayTeam_score)
-        chip = (f'<span class="chip ok">{icon("check", 12)} The model got it right</span>' if ok
-                else f'<span class="chip miss">{icon("x", 12)} The model got it wrong</span>')
-        verdict += (f'<span class="result">Final score <b>{away} {g.awayTeam_score} – {g.homeTeam_score} {home}</b>'
+        chip = (f'<span class="chip ok">{icon("check", 12)} {T("The model got it right", "Le modèle avait raison")}</span>' if ok
+                else f'<span class="chip miss">{icon("x", 12)} {T("The model got it wrong", "Le modèle s'est trompé")}</span>')
+        verdict += (f'<span class="result">{T("Final score", "Score final")} <b>{away} {g.awayTeam_score} – {g.homeTeam_score} {home}</b>'
                     f'{chip}</span>')
 
     note = ""
     if min(h["GAMES"], a["GAMES"]) < 10:
-        note = (f'<span class="note">{icon("alert", 14)} Early season: {h["GAMES"]} and {a["GAMES"]} '
-                f'games played, less reliable prediction</span>')
+        note = (f'<span class="note">{icon("alert", 14)} '
+                + T(f'Early season: {h["GAMES"]} and {a["GAMES"]} games played, less reliable prediction',
+                    f'Début de saison : {h["GAMES"]} et {a["GAMES"]} matchs joués, prédiction moins fiable')
+                + '</span>')
 
     home_cls, away_cls = ("", "dog") if p_home >= 0.5 else ("dog", "")
     home_fav, away_fav = ("fav", "") if p_home >= 0.5 else ("", "fav")
@@ -1560,22 +1648,22 @@ else:
     hero = f"""
     <section class="card hero" style="--home:{color(home)};--away:{color(away)}">
       <div class="hero-top">
-        <span class="eyebrow">Win probability</span>
+        <span class="eyebrow">{T("Win probability", "Probabilité de victoire")}</span>
         <div class="hero-meta">
-          <span>{icon("calendar")} {fr_date(day_ts)} · {local_time(g)} Cotonou time</span>
+          <span>{icon("calendar")} {fr_date(day_ts)} · {local_time(g)} {T("Cotonou time", "heure de Cotonou")}</span>
           <span>{icon("pin")} {arena}</span>
         </div>
       </div>
       <div class="duel" role="img" aria-label="{full_name[home]} {p_home:.0%}, {full_name[away]} {p_away:.0%}">
         <div class="side home {home_fav}">
           <div class="logo-wrap" style="--c:{color(home)}"><span class="halo"></span><img src="{logo(home)}" alt="{full_name[home]}"></div>
-          <div><div class="tname">{full_name[home]}</div><div class="trec num">{h['RECORD']} · Home</div>
+          <div><div class="tname">{full_name[home]}</div><div class="trec num">{h['RECORD']} · {T("Home", "Domicile")}</div>
                <div class="prob {home_cls}">{flaps(pct(p_home), .55)}<small>%</small></div></div>
         </div>
         <div class="vs"><div class="v">VS</div><div class="l">{fr_date(day_ts, year=False)}</div></div>
         <div class="side away {away_fav}">
           <div class="logo-wrap" style="--c:{color(away)}"><span class="halo"></span><img src="{logo(away)}" alt="{full_name[away]}"></div>
-          <div><div class="tname">{full_name[away]}</div><div class="trec num">{a['RECORD']} · Away</div>
+          <div><div class="tname">{full_name[away]}</div><div class="trec num">{a['RECORD']} · {T("Away", "Extérieur")}</div>
                <div class="prob {away_cls}">{flaps(100 - pct(p_home), .7)}<small>%</small></div></div>
         </div>
       </div>
@@ -1590,12 +1678,12 @@ else:
     b2b_h = '<span class="tag-b2b">B2B</span>' if h["B2B"] else ""
     b2b_a = '<span class="tag-b2b">B2B</span>' if a["B2B"] else ""
     kpis = (
-        kpi(0, "Season record", h["WIN_PCT_SEASON"], a["WIN_PCT_SEASON"], h["RECORD"], a["RECORD"], lambda v: v)
-        + kpi(1, "Last 10 games", h["WIN_PCT_LAST10"], a["WIN_PCT_LAST10"], h["L10"], a["L10"], lambda v: v)
-        + kpi(2, "Avg point diff · last 10", h["PM_LAST10"], a["PM_LAST10"],
+        kpi(0, T("Season record", "Bilan de la saison"), h["WIN_PCT_SEASON"], a["WIN_PCT_SEASON"], h["RECORD"], a["RECORD"], lambda v: v)
+        + kpi(1, T("Last 10 games", "10 derniers matchs"), h["WIN_PCT_LAST10"], a["WIN_PCT_LAST10"], h["L10"], a["L10"], lambda v: v)
+        + kpi(2, T("Avg point diff · last 10", "Écart moyen · 10 derniers"), h["PM_LAST10"], a["PM_LAST10"],
               f"{h['PM_LAST10']:+.1f}", f"{a['PM_LAST10']:+.1f}", lambda v: (v + 15) / 30)
-        + kpi(3, "Days of rest", h["REST_DAYS"], a["REST_DAYS"],
-              f"{b2b_h}{h['REST_DAYS']}d", f"{b2b_a}{a['REST_DAYS']}d", lambda v: v / 4)
+        + kpi(3, T("Days of rest", "Jours de repos"), h["REST_DAYS"], a["REST_DAYS"],
+              f"{b2b_h}{h['REST_DAYS']}{T('d', 'j')}", f"{b2b_a}{a['REST_DAYS']}{T('d', 'j')}", lambda v: v / 4)
     )
 
     html(f"""
@@ -1606,19 +1694,19 @@ else:
         {standings_card((home, away))}
         <div class="stack">
           <section class="card" style="--d:.5s">
-            <div class="card-head"><h3>Last games</h3><span>{icon("clock", 13)} before this game</span></div>
+            <div class="card-head"><h3>{T("Last games", "Derniers matchs")}</h3><span>{icon("clock", 13)} {T("before this game", "avant ce match")}</span></div>
             <div class="games">{game_card(0, home, h)}{game_card(1, away, a)}</div>
           </section>
           <section class="card" style="--d:.6s">
-            <div class="card-head"><h3>Hot teams</h3><span>Last 10 games</span></div>
-            <div class="hot">{hot_rows or '<div class="empty">No games played yet.</div>'}</div>
+            <div class="card-head"><h3>{T("Hot teams", "Équipes en forme")}</h3><span>{T("Last 10 games", "10 derniers matchs")}</span></div>
+            <div class="hot">{hot_rows or '<div class="empty">' + T("No games played yet.", "Aucun match joué pour l'instant.") + '</div>'}</div>
           </section>
         </div>
       </div>
     </div>
     """)
 
-    render_grid(f"Other games on <span>{fr_day(day)}</span>")
+    render_grid(T("Other games on <span>", "Autres matchs du <span>") + fr_day(day) + "</span>")
 
     if DEBUG:
         row = {f"{k}_HOME": h[k] for k in BASE_FEATURES} | {f"{k}_AWAY": a[k] for k in BASE_FEATURES}
@@ -1627,8 +1715,8 @@ else:
             st.dataframe(X.T.rename(columns={0: "value"}).round(3), use_container_width=True)
             st.caption(f"Data source: {DATA_SOURCE}")
 
-html("""
+html(f"""
 <div class="footer">
-  © 2026 CourtSide
+  © 2026 CourtSide · {T("Predictions for entertainment only", "Prédictions à titre de divertissement uniquement")}
 </div>
 """)

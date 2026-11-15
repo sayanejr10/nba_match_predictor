@@ -33,7 +33,11 @@ MAX_LEAGUES, MAX_MEMBERS = 10, 50
 
 
 class BeatAIError(Exception):
-    """Erreur affichable telle quelle au joueur."""
+    """Erreur affichable telle quelle au joueur, en anglais (str) et en français (.fr)."""
+
+    def __init__(self, en: str, fr: str = None):
+        super().__init__(en)
+        self.fr = fr or en
 
 
 def _secret(name):
@@ -107,24 +111,26 @@ def _find(pseudo):
 def register(pseudo: str, pin: str) -> dict:
     pseudo, pin = pseudo.strip(), pin.strip()
     if not PSEUDO_RE.fullmatch(pseudo):
-        raise BeatAIError("Username: 3 to 16 characters, letters, numbers or _ only.")
+        raise BeatAIError("Username: 3 to 16 characters, letters, numbers or _ only.",
+                          "Pseudo : 3 à 16 caractères, uniquement des lettres, des chiffres ou _.")
     if not PIN_RE.fullmatch(pin):
-        raise BeatAIError("PIN: exactly 6 digits.")
+        raise BeatAIError("PIN: exactly 6 digits.", "Code PIN : exactement 6 chiffres.")
     if len(set(pin)) == 1 or pin in "0123456789" or pin in "9876543210":
-        raise BeatAIError("This PIN is too easy to guess. Pick another one.")
+        raise BeatAIError("This PIN is too easy to guess. Pick another one.",
+                          "Ce code PIN est trop facile à deviner. Choisis-en un autre.")
     if _find(pseudo):
-        raise BeatAIError("This username is already taken.")
+        raise BeatAIError("This username is already taken.", "Ce pseudo est déjà pris.")
     try:
         row = _req("POST", "players", json={"pseudo": pseudo, "pin_hash": hash_pin(pin)},
                    prefer="return=representation")[0]
     except RuntimeError:
-        raise BeatAIError("This username is already taken.")
+        raise BeatAIError("This username is already taken.", "Ce pseudo est déjà pris.")
     return {"id": row["id"], "pseudo": row["pseudo"]}
 
 
 def login(pseudo: str, pin: str) -> dict:
     pseudo, pin = pseudo.strip(), pin.strip()
-    generic = BeatAIError("Wrong username or PIN.")
+    generic = BeatAIError("Wrong username or PIN.", "Pseudo ou code PIN incorrect.")
     if not PSEUDO_RE.fullmatch(pseudo) or not PIN_RE.fullmatch(pin):
         raise generic
     row = _find(pseudo)
@@ -132,7 +138,8 @@ def login(pseudo: str, pin: str) -> dict:
         raise generic
     now = datetime.now(timezone.utc)
     if row["locked_until"] and datetime.fromisoformat(row["locked_until"]) > now:
-        raise BeatAIError(f"Too many wrong PINs. Try again in {LOCK_MINUTES} minutes.")
+        raise BeatAIError(f"Too many wrong PINs. Try again in {LOCK_MINUTES} minutes.",
+                          f"Trop de codes PIN incorrects. Réessaie dans {LOCK_MINUTES} minutes.")
     if not check_pin(pin, row["pin_hash"]):
         fails = row["failed_attempts"] + 1
         patch = {"failed_attempts": fails}
@@ -223,9 +230,11 @@ def my_leagues(player_id: str) -> list:
 def create_league(player_id: str, name: str) -> dict:
     name = re.sub(r"\s+", " ", str(name or "")).strip()
     if not LEAGUE_NAME_RE.fullmatch(name):
-        raise BeatAIError("League name: 3 to 30 characters (letters, numbers, spaces).")
+        raise BeatAIError("League name: 3 to 30 characters (letters, numbers, spaces).",
+                          "Nom de la ligue : 3 à 30 caractères (lettres, chiffres, espaces).")
     if len(my_leagues(player_id)) >= MAX_LEAGUES:
-        raise BeatAIError(f"You can be in {MAX_LEAGUES} leagues at most.")
+        raise BeatAIError(f"You can be in {MAX_LEAGUES} leagues at most.",
+                          f"Tu peux être dans {MAX_LEAGUES} ligues au maximum.")
     for _ in range(5):                          # en cas (très rare) de code déjà pris, on en tire un autre
         try:
             league = _req("POST", "leagues", json={"name": name, "code": _new_code(), "owner_id": player_id},
@@ -243,18 +252,22 @@ def create_league(player_id: str, name: str) -> dict:
 def join_league(player_id: str, code: str) -> dict:
     code = clean_code(code)
     if not CODE_RE.fullmatch(code):
-        raise BeatAIError("A league code is 6 letters and numbers, like K7P2QX.")
+        raise BeatAIError("A league code is 6 letters and numbers, like K7P2QX.",
+                          "Un code de ligue contient 6 lettres et chiffres, par exemple K7P2QX.")
     rows = _req("GET", "leagues", params={"select": "id,name,code,owner_id", "code": f"eq.{code}"})
     if not rows:
-        raise BeatAIError("No league found with this code. Check it with your friend.")
+        raise BeatAIError("No league found with this code. Check it with your friend.",
+                          "Aucune ligue avec ce code. Vérifie-le avec ton ami.")
     league = rows[0]
     mine = my_leagues(player_id)
     if any(l["id"] == league["id"] for l in mine):
-        raise BeatAIError(f"You are already in {league['name']}.")
+        raise BeatAIError(f"You are already in {league['name']}.", f"Tu es déjà dans {league['name']}.")
     if len(mine) >= MAX_LEAGUES:
-        raise BeatAIError(f"You can be in {MAX_LEAGUES} leagues at most.")
+        raise BeatAIError(f"You can be in {MAX_LEAGUES} leagues at most.",
+                          f"Tu peux être dans {MAX_LEAGUES} ligues au maximum.")
     if len(members(league["id"])) >= MAX_MEMBERS:
-        raise BeatAIError(f"This league is full ({MAX_MEMBERS} players).")
+        raise BeatAIError(f"This league is full ({MAX_MEMBERS} players).",
+                          f"Cette ligue est complète ({MAX_MEMBERS} joueurs).")
     _req("POST", "league_members", json={"league_id": league["id"], "player_id": player_id},
          prefer="return=minimal")
     return league

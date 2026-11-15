@@ -577,6 +577,19 @@ Promise.all([loadGLB('passer.glb'), loadGLB('dunker.glb'), fontsReady]).then(([p
 """
 
 
-def intro3d_page() -> str:
-    """La page HTML complète de l'intro 3D."""
-    return _PAGE.replace("__THREE__", THREE_VERSION)
+_FR = {
+    ">Perfect lob<": ">Passe parfaite<",
+    ">Tonight's picks are in<": ">Les pronos du soir sont là<",
+    ">Warming up…<": ">Échauffement…<",
+    ">Click to skip<": ">Clique pour passer<",
+    ">Tap to skip<": ">Touche pour passer<",
+}
+
+
+def intro3d_page(lang: str = "en") -> str:
+    """La page HTML complète de l'intro 3D, en anglais ou en français."""
+    page = _PAGE.replace("__THREE__", THREE_VERSION)
+    if lang == "fr":
+        for en, fr in _FR.items():
+            page = page.replace(en, fr)
+    return page
